@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Órdenes - Restaurante POS{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4"><i class="bi bi-receipt"></i> Historial de Órdenes</h2>
+    
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Número de Orden</th>
+                            <th>Mesa</th>
+                            <th>Total</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr>
+                            <td><strong>{{ order.order_number }}</strong></td>
+                            <td>{{ order.table_number or 'N/A' }}</td>
+                            <td>${{ "%.2f"|format(order.total_amount) }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if order.status == 'completed' else 'warning' }}">
+                                    {{ 'Completada' if order.status == 'completed' else 'Pendiente' }}
+                                </span>
+                            </td>
+                            <td>{{ order.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#orderModal{{ order.id }}">
+                                    <i class="bi bi-eye"></i> Ver
+                                </button>
+                                {% if order.status == 'pending' %}
+                                <button class="btn btn-sm btn-success" onclick="completeOrder({{ order.id }})">
+                                    <i class="bi bi-check"></i> Completar
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        
+                        <!-- Order Detail Modal -->
+                        <div class="modal fade" id="orderModal{{ order.id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Detalles de Orden {{ order.order_number }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p><strong>Mesa:</strong> {{ order.table_number or 'N/A' }}</p>
+                                        <p><strong>Fecha:</strong> {{ order.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                                        <p><strong>Estado:</strong> 
+                                            <span class="badge bg-{{ 'success' if order.status == 'completed' else 'warning' }}">
+                                                {{ 'Completada' if order.status == 'completed' else 'Pendiente' }}
+                                            </span>
+                                        </p>
+                                        
+                                        <hr>
+                                        <h6>Items:</h6>
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Producto</th>
+                                                    <th>Cantidad</th>
+                                                    <th>Precio</th>
+                                                    <th>Subtotal</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for item in order.items %}
+                                                <tr>
+                                                    <td>{{ item.product_name }}</td>
+                                                    <td>{{ item.quantity }}</td>
+                                                    <td>${{ "%.2f"|format(item.unit_price) }}</td>
+                                                    <td>${{ "%.2f"|format(item.subtotal) }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr>
+                                                    <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                                                    <td><strong>${{ "%.2f"|format(order.total_amount) }}</strong></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if not orders %}
+                <p class="text-center text-muted py-4">No hay órdenes registradas.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function completeOrder(id) {
+    if (!confirm('¿Marcar esta orden como completada?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/orders/${id}/complete`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        }
+    } catch (error) {
+        alert('Error al completar orden');
+        console.error(error);
+    }
+}
+</script>
+{% endblock %}

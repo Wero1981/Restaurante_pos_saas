@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Productos - Restaurante POS{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-box"></i> Gestión de Productos</h2>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addProductModal">
+            <i class="bi bi-plus-circle"></i> Agregar Producto
+        </button>
+    </div>
+    
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Descripción</th>
+                            <th>Categoría</th>
+                            <th>Precio</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                        <tr>
+                            <td>{{ product.name }}</td>
+                            <td>{{ product.description }}</td>
+                            <td>{{ product.category }}</td>
+                            <td>${{ "%.2f"|format(product.price) }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if product.available else 'secondary' }}">
+                                    {{ 'Disponible' if product.available else 'No disponible' }}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-warning" onclick="toggleProduct({{ product.id }})">
+                                    <i class="bi bi-toggle-{{ 'on' if product.available else 'off' }}"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteProduct({{ product.id }})">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if not products %}
+                <p class="text-center text-muted py-4">No hay productos. Agrega tu primer producto para comenzar.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Product Modal -->
+<div class="modal fade" id="addProductModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Agregar Producto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addProductForm">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Nombre *</label>
+                        <input type="text" class="form-control" id="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Descripción</label>
+                        <textarea class="form-control" id="description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="category" class="form-label">Categoría</label>
+                        <input type="text" class="form-control" id="category" placeholder="Ej: Bebidas, Comidas, Postres">
+                    </div>
+                    <div class="mb-3">
+                        <label for="price" class="form-label">Precio *</label>
+                        <input type="number" class="form-control" id="price" step="0.01" min="0" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="addProduct()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function addProduct() {
+    const name = document.getElementById('name').value;
+    const description = document.getElementById('description').value;
+    const category = document.getElementById('category').value;
+    const price = document.getElementById('price').value;
+    
+    if (!name || !price) {
+        alert('Por favor completa los campos requeridos');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/products/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: name,
+                description: description,
+                category: category,
+                price: parseFloat(price)
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        }
+    } catch (error) {
+        alert('Error al agregar producto');
+        console.error(error);
+    }
+}
+
+async function deleteProduct(id) {
+    if (!confirm('¿Estás seguro de eliminar este producto?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/products/${id}/delete`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        }
+    } catch (error) {
+        alert('Error al eliminar producto');
+        console.error(error);
+    }
+}
+
+async function toggleProduct(id) {
+    try {
+        const response = await fetch(`/products/${id}/toggle`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        }
+    } catch (error) {
+        alert('Error al cambiar estado del producto');
+        console.error(error);
+    }
+}
+</script>
+{% endblock %}
