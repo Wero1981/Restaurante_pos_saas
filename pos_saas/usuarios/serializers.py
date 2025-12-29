@@ -4,19 +4,26 @@ from restaurantes.models import Restaurante, UsuarioRestaurante
 from suscripciones.models import Plan, Suscripcion
 from datetime import date, timedelta
 
+
+
 class RegistroSerializer(serializers.ModelSerializer):
     restaurante_nombre = serializers.CharField(write_only=True)
 
     class Meta:
         model = Usuario
-        fields = ['username', 'email', 'password', 'restaurante_nombre']
+        fields = ['username', 'email', 'password', 'nombre', 'restaurante_nombre']
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
         restaurante_nombre = validated_data.pop('restaurante_nombre')
         user = Usuario.objects.create_user(**validated_data)
 
-        restaurante = Restaurante.objects.create(nombre = restaurante_nombre)
+        restaurante = Restaurante.objects.create(
+            nombre=restaurante_nombre,
+            propietario=user,
+            direccion='',
+            telefono=''
+        )
 
         UsuarioRestaurante.objects.create(
             usuario=user,
