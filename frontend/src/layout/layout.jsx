@@ -4,11 +4,11 @@ import Topbar from "./Topbar";
 
 export default function Layout() {
   return (
-    <div className="d-flex vh-100 overflow-hidden">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar />
-      <div className="flex-grow-1 d-flex flex-column">
+      <div className="flex-1 flex flex-col">
         <Topbar />
-        <div className="flex-grow-1 p-4 overflow-auto bg-light">
+        <div className="flex-1 p-6 overflow-auto bg-gray-50">
           <Outlet />
         </div>
       </div>

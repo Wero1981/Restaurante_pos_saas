@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { Button } from "@/components/ui/button";
 
 export default function Topbar() {
   const navigate = useNavigate();
@@ -16,46 +17,30 @@ export default function Topbar() {
   };
   
   return (
-    <nav className="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
-      <div className="container-fluid px-4">
-        <div className="d-flex align-items-center">
-          <i className="fas fa-calendar-alt text-primary me-2"></i>
-          <span className="text-muted">{currentDate}</span>
-        </div>
-        
-        <div className="d-flex align-items-center">
-          <div className="dropdown">
-            <button 
-              className="btn btn-link text-decoration-none text-dark dropdown-toggle d-flex align-items-center"
-              type="button"
-              id="userDropdown"
-              data-bs-toggle="dropdown"
-              aria-expanded="false"
-            >
-              <i className="fas fa-user-circle fa-2x text-primary me-2"></i>
-              <div className="text-start">
-                <div className="fw-bold">Usuario</div>
-                <small className="text-muted">Administrador</small>
+    <nav className="bg-background border-b">
+      <div className="px-6 py-4">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center">
+            <i className="fas fa-calendar-alt text-primary mr-2"></i>
+            <span className="text-muted-foreground">{currentDate}</span>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <i className="fas fa-user-circle text-4xl text-primary"></i>
+              <div className="text-left">
+                <div className="font-bold">Usuario</div>
+                <small className="text-muted-foreground">Administrador</small>
               </div>
-            </button>
-            <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-              <li>
-                <a className="dropdown-item" href="#">
-                  <i className="fas fa-user me-2"></i>Mi Perfil
-                </a>
-              </li>
-              <li>
-                <a className="dropdown-item" href="#">
-                  <i className="fas fa-cog me-2"></i>Configuración
-                </a>
-              </li>
-              <li><hr className="dropdown-divider" /></li>
-              <li>
-                <button className="dropdown-item text-danger" onClick={handleLogout}>
-                  <i className="fas fa-sign-out-alt me-2"></i>Cerrar Sesión
-                </button>
-              </li>
-            </ul>
+            </div>
+            <Button 
+              onClick={handleLogout}
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+            >
+              <i className="fas fa-sign-out-alt mr-2"></i>
+              Salir
+            </Button>
           </div>
         </div>
       </div>

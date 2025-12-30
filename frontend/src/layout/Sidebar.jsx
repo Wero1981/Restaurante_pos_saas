@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Button } from "@/components/ui/button";
 
 export default function Sidebar() {
   const location = useLocation();
@@ -17,25 +18,27 @@ export default function Sidebar() {
   };
   
   return (
-    <div className="bg-dark text-white vh-100 d-flex flex-column" style={{ width: 250 }}>
-      <div className="p-3 border-bottom border-secondary">
-        <h4 className="mb-0">
-          <i className="fas fa-utensils me-2"></i>
+    <div className="bg-gray-900 text-white h-screen flex flex-col w-64">
+      <div className="p-4 border-b border-gray-700">
+        <h4 className="text-xl font-bold">
+          <i className="fas fa-utensils mr-2"></i>
           POS Restaurant
         </h4>
       </div>
       
-      <nav className="flex-grow-1 p-3">
-        <ul className="nav flex-column">
+      <nav className="flex-grow p-3">
+        <ul className="space-y-2">
           {menuItems.map((item) => (
-            <li className="nav-item mb-2" key={item.path}>
+            <li key={item.path}>
               <Link 
-                className={`nav-link text-white rounded d-flex align-items-center p-3 ${
-                  location.pathname === item.path ? 'bg-primary' : 'hover-bg-secondary'
+                className={`flex items-center p-3 rounded-lg transition-colors ${
+                  location.pathname === item.path 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'text-gray-300 hover:bg-gray-800'
                 }`}
                 to={item.path}
               >
-                <i className={`fas ${item.icon} me-3`}></i>
+                <i className={`fas ${item.icon} mr-3`}></i>
                 {item.label}
               </Link>
             </li>
@@ -43,11 +46,15 @@ export default function Sidebar() {
         </ul>
       </nav>
       
-      <div className="p-3 border-top border-secondary">
-        <button onClick={handleLogout} className="btn btn-outline-light w-100">
-          <i className="fas fa-sign-out-alt me-2"></i>
+      <div className="p-3 border-t border-gray-700">
+        <Button 
+          onClick={handleLogout} 
+          variant="outline"
+          className="w-full border-gray-600 text-white hover:bg-gray-800"
+        >
+          <i className="fas fa-sign-out-alt mr-2"></i>
           Cerrar Sesión
-        </button>
+        </Button>
       </div>
     </div>
   );

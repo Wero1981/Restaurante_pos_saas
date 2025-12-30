@@ -9,8 +9,6 @@ class Venta(models.Model):
     metodo_pago = models.CharField(max_length=50)
     fecha = models.DateTimeField(auto_now_add=True)
 
-
-
 class VentaDetalle(models.Model):
     venta = models.ForeignKey(Venta, on_delete=models.CASCADE)
     producto = models.ForeignKey('productos.Producto', on_delete=models.CASCADE)

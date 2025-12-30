@@ -1,6 +1,8 @@
-// productos/Productos.jsx
 import { useEffect, useState } from 'react';
 import api from '../services/api';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function Productos() {
   const [nombre, setNombre] = useState('');
@@ -16,16 +18,30 @@ export default function Productos() {
   };
 
   return (
-    <>
-      <h4>Productos</h4>
-      <input className="form-control mb-2"
-        value={nombre}
-        onChange={e => setNombre(e.target.value)} />
-      <button className="btn btn-primary" onClick={guardar}>Agregar</button>
+    <div className="p-6">
+      <h4 className="text-2xl font-bold mb-4">Productos</h4>
+      <div className="flex gap-2 mb-4">
+        <Input 
+          className="flex-1"
+          placeholder="Nombre del producto"
+          value={nombre}
+          onChange={e => setNombre(e.target.value)} 
+        />
+        <Button onClick={guardar}>
+          <i className="fas fa-plus mr-2"></i>
+          Agregar
+        </Button>
+      </div>
 
-      <ul className="mt-3">
-        {productos.map(p => <li key={p.id}>{p.nombre}</li>)}
-      </ul>
-    </>
+      <div className="space-y-2">
+        {productos.map(p => (
+          <Card key={p.id}>
+            <CardContent className="p-4">
+              {p.nombre}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }

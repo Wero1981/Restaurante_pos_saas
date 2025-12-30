@@ -24,6 +24,7 @@ urlpatterns = [
     
     # API URLs
     path("api/usuarios/", include("usuarios.urls")),
+    path("api/restaurantes/", include("restaurantes.urls")),
     
     # Swagger/OpenAPI Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
