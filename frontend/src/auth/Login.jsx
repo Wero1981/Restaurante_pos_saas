@@ -18,6 +18,7 @@ export default function Login() {
         try {
             const response = await api.post('/usuarios/login/', data);
             localStorage.setItem('token', response.data.access);
+            //get datos de usuarios
             navigate('/productos');
         } catch (error) {
             console.error("Login failed:", error);

@@ -21,28 +21,27 @@ class RestauranteSerializer(serializers.ModelSerializer):
         ]
         #read_only_fields = ['id', 'propietario', 'activo', 'created_at', 'configuracion']
 
-        def update(self, instance, validated_data):
-            # Extraer los datos de configuración si existen
-            config_data = {
-                'tipo_moneda': validated_data.pop('tipo_moneda', None),
-                'descripcion': validated_data.pop('descripcion', None),
-                'logo': validated_data.pop('logo', None),
-            }
+    def update(self, instance, validated_data):
+        # Extraer los datos de configuración si existen
+        config_data = {
+            'tipo_moneda': validated_data.pop('tipo_moneda', None),
+            'descripcion': validated_data.pop('descripcion', None),
+            'logo': validated_data.pop('logo', None),
+        }
 
-            # Actualizar los campos del restaurante
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
-            instance.save()
+        # Actualizar los campos del restaurante
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
 
-            # Actualizar o crear la configuración asociada
-            if any(value is not None for value in config_data.values()):
-                Configuracion.objects.update_or_create(
-                    restaurante=instance,
-                    defaults={k: v for k, v in config_data.items() if v is not None}
-                )
+        # Actualizar o crear la configuración asociada
+        if any(value is not None for value in config_data.values()):
+            Configuracion.objects.update_or_create(
+                restaurante=instance,
+                defaults={k: v for k, v in config_data.items() if v is not None}
+            )
 
-            return instance
+        return instance
     
-
 
     

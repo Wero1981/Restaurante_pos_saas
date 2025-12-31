@@ -1,12 +1,41 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import api from '../services/api';
 import { useNavigate } from "react-router-dom";
+import {
+        Dialog,
+        DialogContent,
+        DialogHeader,
+        DialogTitle,
+        DialogDescription
+       } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+
+
+
 
 export default function RegisterRestaurante() {
     const [data, setData] = useState({});
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [open, setOpen] = useState(false);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        //Verificar si el restaurante ya está registrado
+        const checkRestaurante = async () => {
+            try {
+                const response = await api.get('/restaurantes/mi-restaurante/');
+                if (response.data) {
+                    setData(response.data); 
+                    
+                }
+            } catch (error) {
+                // No hacer nada, el restaurante no está registrado
+                console.log("No se encontró restaurante registrado.", error);
+            }
+        };
+        checkRestaurante();
+    }, []);
 
     const register = async (e) => {
         e.preventDefault();
@@ -15,7 +44,7 @@ export default function RegisterRestaurante() {
         
         try {
             await api.post('/restaurantes/mi-restaurante/', data);
-            navigate('/productos');
+            setOpen(true);
         } catch (error) {
             console.error("Registration failed:", error);
             setError(error.response?.data?.message || "Error al registrar el restaurante");
@@ -28,7 +57,7 @@ export default function RegisterRestaurante() {
         <div className="p-6">
             <div className="max-w-5xl mx-auto">
                 <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-                    <div className="bg-blue-600 text-white py-4 px-6">
+                    <div className="bg-orange-500 text-white py-4 px-6">
                         <div className="flex items-center">
                             <i className="fas fa-store text-3xl mr-4"></i>
                             <div>
@@ -67,6 +96,7 @@ export default function RegisterRestaurante() {
                                             type="text"
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                                             placeholder="Ej: La Casa del Sabor"
+                                            value = {data.nombre || ''}
                                             required
                                             onChange={e => setData({ ...data, nombre: e.target.value })} 
                                         />
@@ -81,6 +111,7 @@ export default function RegisterRestaurante() {
                                             type="tel"
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                                             placeholder="Ej: +52 123 456 7890"
+                                            value = {data.telefono || ''}
                                             onChange={e => setData({ ...data, telefono: e.target.value })} 
                                         />
                                     </div>
@@ -94,6 +125,7 @@ export default function RegisterRestaurante() {
                                             type="text"
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                                             placeholder="Ej: Av. Principal #123, Colonia Centro"
+                                            value = {data.direccion || ''}
                                             required
                                             onChange={e => setData({ ...data, direccion: e.target.value })} 
                                         />
@@ -108,6 +140,7 @@ export default function RegisterRestaurante() {
                                             type="text"
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                                             placeholder="Ej: Ciudad de México"
+                                            value={data.ciudad || ''}
                                             onChange={e => setData({ ...data, ciudad: e.target.value })} 
                                         />
                                     </div>
@@ -121,6 +154,7 @@ export default function RegisterRestaurante() {
                                             type="text"
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                                             placeholder="Ej: CDMX"
+                                            value={data.estado || ''}
                                             onChange={e => setData({ ...data, estado: e.target.value })} 
                                         />
                                     </div>
@@ -134,6 +168,7 @@ export default function RegisterRestaurante() {
                                             type="email"
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                                             placeholder="restaurante@ejemplo.com"
+                                            value={data.email || ''}
                                             onChange={e => setData({ ...data, email: e.target.value })} 
                                         />
                                     </div>
@@ -147,6 +182,7 @@ export default function RegisterRestaurante() {
                                             type="url"
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                                             placeholder="https://www.ejemplo.com"
+                                            value={data.sitio_web || ''}
                                             onChange={e => setData({ ...data, sitio_web: e.target.value })} 
                                         />
                                     </div>
@@ -170,6 +206,7 @@ export default function RegisterRestaurante() {
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                             onChange={e => setData({ ...data, moneda: e.target.value })}
                                         >
+                                            <option value={data.moneda || ""} disabled>{data.moneda ? data.moneda : "Seleccionar moneda"}</option>
                                             <option value="">Seleccionar moneda</option>
                                             <option value="MXN">MXN - Peso Mexicano</option>
                                             <option value="USD">USD - Dólar Americano</option>
@@ -199,6 +236,7 @@ export default function RegisterRestaurante() {
                                             type="url"
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                                             placeholder="https://www.ejemplo.com/logo.png"
+                                            value={data.logo_url || ''}
                                             onChange={e => setData({ ...data, logo_url: e.target.value })} 
                                         />
                                         <small className="text-gray-500">Puedes subir tu logo a un servicio de alojamiento de imágenes y pegar la URL aquí.</small>
@@ -219,7 +257,7 @@ export default function RegisterRestaurante() {
                                 </button>
                                 <button 
                                     type="submit" 
-                                    className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                    className="px-8 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
                                     disabled={loading}
                                 >
                                     {loading ? (
@@ -246,6 +284,28 @@ export default function RegisterRestaurante() {
                     </small>
                 </div>
             </div>
+
+            {/* Dialog para mostrar mensajes */}
+            <Dialog open={open} onOpenChange={setOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>¡Registro Exitoso!</DialogTitle>
+                        <DialogDescription>
+                            El registro de tu restaurante se ha completado exitosamente.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex justify-end gap-2 mt-4">
+                        <Button variant="outline" onClick={() => setOpen(false)}>
+                            Cerrar
+                        </Button>
+                        <Button onClick={() => navigate('/productos')}>
+                            Ir a Productos
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>   
         </div>
+
+     
     );
 }

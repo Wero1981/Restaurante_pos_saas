@@ -40,6 +40,17 @@ from .serializer import RestauranteSerializer
                 description='ID del restaurante'
             )
         ]
+    ),
+    destroy=extend_schema(
+        description="Elimina el restaurante asociado al usuario autenticado.",
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                description='ID del restaurante'
+            )
+        ]
     )
 
 )
@@ -56,20 +67,38 @@ class RestauranteViewSet(viewsets.ModelViewSet):
         return super().update(request, *args, **kwargs)
     
     @extend_schema(
-        summary="Actualizar información del restaurante del usuario autenticado",
-        description="Actualiza los datos del restaurante asociado al usuario sin necesidad de especificar el ID",
+        summary="Gestionar información del restaurante del usuario autenticado",
+        description="GET: Obtiene el restaurante. PUT/PATCH/POST: Actualiza el restaurante sin necesidad de especificar ID",
         request=RestauranteSerializer,
         responses={200: RestauranteSerializer}
     )
-    @action(detail=False, methods=['post', 'put', 'patch'], url_path='mi-restaurante')
-    def actualizar_mi_restaurante(self, request):
-        """Actualiza el restaurante del usuario autenticado sin necesidad de ID"""
+    @action(detail=False, methods=['get', 'post', 'put', 'patch'], url_path='mi-restaurante')
+    def mi_restaurante(self, request):
+        """Obtiene o actualiza el restaurante del usuario autenticado sin necesidad de ID"""
         try:
-            restaurante = Restaurante.objects.get(propietario=request.user)
-            serializer = self.get_serializer(restaurante, data=request.data, partial=True)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            return Response(serializer.data)
+            # Buscar restaurantes del usuario
+            restaurantes = Restaurante.objects.filter(propietario=request.user, activo=True)
+
+            if not restaurantes.exists():
+                return Response(
+                    {"error": "No se encontró un restaurante asociado a este usuario"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            restaurante = restaurantes.first()
+            
+            # GET: Retornar información
+            if request.method == 'GET':
+                serializer = self.get_serializer(restaurante)
+                return Response(serializer.data)
+            
+            # POST/PUT/PATCH: Actualizar información
+            else:
+                serializer = self.get_serializer(restaurante, data=request.data, partial=True)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                return Response(serializer.data)
+                
         except Restaurante.DoesNotExist:
             return Response(
                 {"error": "No se encontró un restaurante asociado a este usuario"},

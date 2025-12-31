@@ -5,6 +5,7 @@ from usuarios.models import Usuario
 class Categoria(models.Model):
     restaurante = models.ForeignKey(Restaurante, on_delete=models.CASCADE)
     nombre = models.CharField(max_length=100)
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subcategorias')
 
 
 class Producto(models.Model):
