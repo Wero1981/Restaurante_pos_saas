@@ -4,8 +4,8 @@ from .manager import UsuarioManager
 
 class Usuario(AbstractUser, PermissionsMixin):
     nombre = models.CharField(max_length=150)
-    apellidoM = models.CharField(max_length=150)
-    apellidoP = models.CharField(max_length=150)
+    apellidoM = models.CharField(max_length=150, blank=True, null=True)
+    apellidoP = models.CharField(max_length=150, blank=True, null=True)
     email = models.EmailField(unique=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)

@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import CategoriaViewSet, ProductoViewSet
 router = DefaultRouter()
 router.register(r'categorias', CategoriaViewSet, basename='categoria')
-router.register(r'productos', ProductoViewSet, basename='producto')
+router.register(r'', ProductoViewSet, basename='producto')
 
 urlpatterns = [
     path('', include(router.urls)),

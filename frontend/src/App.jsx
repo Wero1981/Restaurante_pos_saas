@@ -1,8 +1,12 @@
 import AppRouter from "./router/AppRouter";
+import { POSProvider } from "./context/POSContext";
+
 export default function App() {
   return (
-    <div className="App">
-      <AppRouter />
-    </div>
+    <POSProvider>
+      <div className="App">
+        <AppRouter />
+      </div>
+    </POSProvider>
   );
 }

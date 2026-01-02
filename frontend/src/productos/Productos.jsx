@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { usePOS } from '../context/POSContext';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,9 +12,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ChevronRight, ChevronDown, Plus, Search, Edit, Trash2, FolderPlus } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Search, Edit, Trash2, FolderPlus, ShoppingCart } from "lucide-react";
 
 export default function Productos() {
+  const navigate = useNavigate();
+  const { mesaSeleccionada, agregarAlCarrito, carrito } = usePOS();
   const [categorias, setCategorias] = useState([]);
   const [productos, setProductos] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null);
@@ -36,30 +40,29 @@ export default function Productos() {
   const cargarProductos = async () => {
     try {
       const res = await api.get('/productos/');
-      setProductos(res.data);
+      setProductos(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error('Error cargando productos:', error);
+      setProductos([]);
     }
   };
 
   const cargarCategorias = async () => {
     try {
       const res = await api.get('/productos/categorias/');
-      setCategorias(res.data);
+      setCategorias(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error('Error cargando categorías:', error);
+      setCategorias([]);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     cargarCategorias();
     cargarProductos();
   }, []);
-
-
-
- 
-
+  
   const guardarCategoria = async (e) => {
     e.preventDefault();
     try {
@@ -144,22 +147,51 @@ export default function Productos() {
     ));
   };
 
-  const productosFiltrados = productos.filter(p => {
+  const productosFiltrados = (Array.isArray(productos) ? productos : []).filter(p => {
     const matchBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
                           p.descripcion?.toLowerCase().includes(busqueda.toLowerCase());
     const matchCategoria = !categoriaSeleccionada || p.categoria === categoriaSeleccionada;
     return matchBusqueda && matchCategoria;
   });
 
+  const handleAgregarAlCarrito = (producto) => {
+    agregarAlCarrito(producto);
+  };
+
+  const irACaja = () => {
+    navigate('/caja');
+  };
+
   return (
     <div className="h-[calc(100vh-80px)] flex flex-col p-6">
       {/* Header */}
       <div className="mb-4">
-        <h2 className="text-3xl font-bold text-gray-800">
-          <i className="fas fa-box-open text-orange-500 mr-3"></i>
-          Productos y Categorías
-        </h2>
-        <p className="text-gray-600 mt-1">Gestiona tu inventario y categorías</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-800">
+              <i className="fas fa-box-open text-orange-500 mr-3"></i>
+              Productos y Categorías
+            </h2>
+            <p className="text-gray-600 mt-1">Gestiona tu inventario y categorías</p>
+          </div>
+
+          {/* Indicador de Mesa y Carrito */}
+          {mesaSeleccionada && (
+            <div className="flex items-center gap-3">
+              <div className="bg-orange-100 text-orange-700 px-4 py-2 rounded-lg border border-orange-300">
+                <span className="font-semibold">Mesa {mesaSeleccionada.numero}</span>
+              </div>
+              <Button 
+                onClick={irACaja}
+                className="bg-green-600 hover:bg-green-700"
+                disabled={carrito.length === 0}
+              >
+                <ShoppingCart className="w-4 h-4 mr-2" />
+                Ver Carrito ({carrito.length})
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Layout Principal */}
@@ -268,12 +300,26 @@ export default function Productos() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-2">
-                            <button className="p-1 hover:bg-gray-200 rounded">
-                              <Edit className="w-4 h-4 text-blue-600" />
-                            </button>
-                            <button className="p-1 hover:bg-gray-200 rounded">
-                              <Trash2 className="w-4 h-4 text-red-600" />
-                            </button>
+                            {mesaSeleccionada ? (
+                              <Button
+                                size="sm"
+                                onClick={() => handleAgregarAlCarrito(producto)}
+                                className="bg-orange-500 hover:bg-orange-600"
+                                disabled={!producto.activo || producto.stock <= 0}
+                              >
+                                <Plus className="w-4 h-4 mr-1" />
+                                Agregar
+                              </Button>
+                            ) : (
+                              <>
+                                <button className="p-1 hover:bg-gray-200 rounded">
+                                  <Edit className="w-4 h-4 text-blue-600" />
+                                </button>
+                                <button className="p-1 hover:bg-gray-200 rounded">
+                                  <Trash2 className="w-4 h-4 text-red-600" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>

@@ -11,12 +11,21 @@ class RegistroSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Usuario
-        fields = ['username', 'email', 'password', 'nombre', 'restaurante_nombre']
+        fields = ['email', 'password', 'nombre', 'restaurante_nombre']
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
         restaurante_nombre = validated_data.pop('restaurante_nombre')
-        user = Usuario.objects.create_user(**validated_data)
+        password = validated_data.pop('password')
+        email = validated_data.pop('email')
+        nombre = validated_data.pop('nombre')
+        
+        user = Usuario.objects.create_user(
+            email=email,
+            nombre=nombre,
+            password=password,
+            **validated_data
+        )
 
         restaurante = Restaurante.objects.create(
             nombre=restaurante_nombre,

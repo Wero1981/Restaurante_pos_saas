@@ -66,18 +66,6 @@ export default function RegisterUser() {
                                 </div>
                                 <form onSubmit={submit} className="space-y-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="username">
-                                            <i className="fas fa-user mr-2 text-primary"></i>Usuario
-                                        </Label>
-                                        <Input
-                                            id="username"
-                                            placeholder="usuario123"
-                                            required
-                                            onChange={e => setForm({ ...form, username: e.target.value })}
-                                        />
-                                    </div>
-                        
-                                    <div className="space-y-2">
                                         <Label htmlFor="nombre">
                                             <i className="fas fa-id-card mr-2 text-primary"></i>Nombre Completo
                                         </Label>
