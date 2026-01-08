@@ -10,11 +10,12 @@ import { Plus, Users, MapPin, Edit, Trash2 } from "lucide-react";
 
 export default function Mesas() {
   const navigate = useNavigate();
-  const { seleccionarMesa, mesaSeleccionada } = usePOS();
+  const { seleccionarMesa, establecerPedidoActivo, mesaSeleccionada } = usePOS();
   const [mesas, setMesas] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mesaForm, setMesaForm] = useState({ numero: '', capacidad: 4 });
   const [editando, setEditando] = useState(null);
+  const [cargandoPedido, setCargandoPedido] = useState(false);
 
   useEffect(() => {
     cargarMesas();
@@ -58,10 +59,37 @@ export default function Mesas() {
     }
   };
 
-  const handleSeleccionarMesa = (mesa) => {
-    seleccionarMesa(mesa);
-    // Navegar a productos para tomar orden
-    navigate('/productos');
+  const handleSeleccionarMesa = async (mesa) => {
+    try {
+      setCargandoPedido(true);
+      seleccionarMesa(mesa);
+      
+      // Obtener el usuario actual del localStorage
+      const token = localStorage.getItem('token');
+      let userId = null;
+      
+      if (token) {
+        // Decodificar el token para obtener el user_id
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        userId = payload.user_id;
+      }
+      // Abrir o obtener pedido activo para esta mesa
+      const response = await api.post('/pedidos/abrir/', {
+        mesa_id: mesa.id,
+        mesero_id: userId // Enviar el ID del usuario actual como mesero
+      });
+      
+      // Establecer el pedido activo en el contexto
+      establecerPedidoActivo(response.data);
+      
+      // Navegar a la pantalla de pedido
+      navigate('/pedido');
+    } catch (error) {
+      console.error('Error abriendo pedido:', error);
+      alert('Error al abrir el pedido');
+    } finally {
+      setCargandoPedido(false);
+    }
   };
 
   const abrirDialogNuevo = () => {

@@ -1,0 +1,368 @@
+import { useEffect, useState } from 'react';
+import api from '../services/api';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Plus, Search, Edit, Trash2, Users, Mail, Shield } from "lucide-react";
+
+export default function GestionUsuarios() {
+  const [usuarios, setUsuarios] = useState([]);
+  const [busqueda, setBusqueda] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [usuarioForm, setUsuarioForm] = useState({
+    email: '',
+    nombre: '',
+    apellido: '',
+    password: '',
+    rol: 'mesero',
+    activo: true
+  });
+
+  const cargarUsuarios = async () => {
+    try {
+      const res = await api.get('/restaurantes/usuarios/');
+      setUsuarios(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.error('Error cargando usuarios:', error);
+      setUsuarios([]);
+    }
+  };
+
+  useEffect(() => {
+    cargarUsuarios();
+  }, []);
+
+  const guardarUsuario = async (e) => {
+    e.preventDefault();
+    try {
+      if (editando) {
+        // Editar usuario existente
+        const dataToUpdate = { ...usuarioForm };
+        // No enviar password si está vacío
+        if (!dataToUpdate.password) {
+          delete dataToUpdate.password;
+        }
+        await api.put(`/restaurantes/usuarios/${editando}/`, dataToUpdate);
+      } else {
+        // Crear nuevo usuario
+        await api.post('/restaurantes/usuarios/', usuarioForm);
+      }
+      
+      setDialogOpen(false);
+      resetForm();
+      cargarUsuarios();
+    } catch (error) {
+      console.error('Error guardando usuario:', error);
+      const errorMsg = error.response?.data?.email?.[0] || 
+                       error.response?.data?.detail ||
+                       'Error al guardar usuario';
+      alert(errorMsg);
+    }
+  };
+
+  const eliminarUsuario = async (id) => {
+    if (confirm('¿Estás seguro de eliminar este usuario?')) {
+      try {
+        await api.delete(`/restaurantes/usuarios/${id}/`);
+        cargarUsuarios();
+      } catch (error) {
+        console.error('Error eliminando usuario:', error);
+        alert('Error al eliminar usuario');
+      }
+    }
+  };
+
+  const abrirDialogNuevo = () => {
+    resetForm();
+    setEditando(null);
+    setDialogOpen(true);
+  };
+
+  const abrirDialogEditar = (usuario) => {
+    setEditando(usuario.id);
+    setUsuarioForm({
+      email: usuario.email,
+      nombre: usuario.nombre || '',
+      apellido: usuario.apellido || '',
+      password: '', // No mostrar password al editar
+      rol: usuario.rol || 'mesero',
+      activo: usuario.activo !== undefined ? usuario.activo : true
+    });
+    setDialogOpen(true);
+  };
+
+  const resetForm = () => {
+    setUsuarioForm({
+      email: '',
+      nombre: '',
+      apellido: '',
+      password: '',
+      rol: 'mesero',
+      activo: true
+    });
+    setEditando(null);
+  };
+
+  const usuariosFiltrados = usuarios.filter(u => {
+    const searchTerm = busqueda.toLowerCase();
+    return (
+      u.email?.toLowerCase().includes(searchTerm) ||
+      u.nombre?.toLowerCase().includes(searchTerm) ||
+      u.apellido?.toLowerCase().includes(searchTerm)
+    );
+  });
+
+  const getRolBadge = (rol) => {
+    const colores = {
+      admin: 'bg-purple-100 text-purple-800',
+      gerente: 'bg-blue-100 text-blue-800',
+      mesero: 'bg-green-100 text-green-800',
+      cajero: 'bg-orange-100 text-orange-800',
+      cocinero: 'bg-yellow-100 text-yellow-800',
+    };
+    return colores[rol] || 'bg-gray-100 text-gray-800';
+  };
+
+  const getRolLabel = (rol) => {
+    const labels = {
+      admin: 'Administrador',
+      gerente: 'Gerente',
+      mesero: 'Mesero',
+      cajero: 'Cajero',
+      cocinero: 'Cocinero',
+    };
+    return labels[rol] || rol;
+  };
+
+  return (
+    <div className="h-[calc(100vh-80px)] flex flex-col p-6">
+      {/* Header */}
+      <div className="mb-4">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-800">
+              <Users className="inline-block w-8 h-8 text-orange-500 mr-3" />
+              Gestión de Usuarios
+            </h2>
+            <p className="text-gray-600 mt-1">Administra el personal del restaurante</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Contenido Principal */}
+      <Card className="flex-1 flex flex-col">
+        <CardContent className="p-4 flex flex-col h-full">
+          {/* Barra de búsqueda y acciones */}
+          <div className="flex gap-3 mb-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Buscar usuarios por email o nombre..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Button onClick={abrirDialogNuevo}>
+              <Plus className="w-4 h-4 mr-2" />
+              Nuevo Usuario
+            </Button>
+          </div>
+
+          {/* Tabla de Usuarios */}
+          <div className="flex-1 overflow-auto border rounded-lg">
+            <table className="w-full">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {usuariosFiltrados.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-4 py-8 text-center text-gray-500">
+                      <Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                      <p>No hay usuarios para mostrar</p>
+                    </td>
+                  </tr>
+                ) : (
+                  usuariosFiltrados.map(usuario => (
+                    <tr key={usuario.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm">{usuario.email}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900">
+                          {usuario.nombre} {usuario.apellido}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRolBadge(usuario.rol)}`}>
+                          <Shield className="w-3 h-3 mr-1" />
+                          {getRolLabel(usuario.rol)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          usuario.activo ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {usuario.activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => abrirDialogEditar(usuario)}
+                            className="p-1 hover:bg-blue-100 rounded"
+                            title="Editar usuario"
+                          >
+                            <Edit className="w-4 h-4 text-blue-600" />
+                          </button>
+                          <button 
+                            onClick={() => eliminarUsuario(usuario.id)}
+                            className="p-1 hover:bg-red-100 rounded"
+                            title="Eliminar usuario"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer con contador */}
+          <div className="mt-4 pt-4 border-t text-sm text-gray-600">
+            Mostrando {usuariosFiltrados.length} de {usuarios.length} usuarios
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Dialog Crear/Editar Usuario */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editando ? 'Editar Usuario' : 'Nuevo Usuario'}
+            </DialogTitle>
+            <DialogDescription>
+              {editando 
+                ? 'Modifica los datos del usuario. Deja la contraseña vacía para mantener la actual.'
+                : 'Completa la información del nuevo usuario del restaurante'}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={guardarUsuario} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Email *</label>
+              <Input
+                type="email"
+                placeholder="usuario@ejemplo.com"
+                value={usuarioForm.email}
+                onChange={(e) => setUsuarioForm({ ...usuarioForm, email: e.target.value })}
+                required
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Nombre</label>
+                <Input
+                  placeholder="Nombre"
+                  value={usuarioForm.nombre}
+                  onChange={(e) => setUsuarioForm({ ...usuarioForm, nombre: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Apellido</label>
+                <Input
+                  placeholder="Apellido"
+                  value={usuarioForm.apellido}
+                  onChange={(e) => setUsuarioForm({ ...usuarioForm, apellido: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Contraseña {editando && '(dejar vacío para no cambiar)'}
+              </label>
+              <Input
+                type="password"
+                placeholder={editando ? 'Nueva contraseña (opcional)' : 'Contraseña'}
+                value={usuarioForm.password}
+                onChange={(e) => setUsuarioForm({ ...usuarioForm, password: e.target.value })}
+                required={!editando}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Rol *</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                value={usuarioForm.rol}
+                onChange={(e) => setUsuarioForm({ ...usuarioForm, rol: e.target.value })}
+                required
+              >
+                <option value="mesero">Mesero</option>
+                <option value="cajero">Cajero</option>
+                <option value="cocinero">Cocinero</option>
+                <option value="gerente">Gerente</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="activo"
+                checked={usuarioForm.activo}
+                onChange={(e) => setUsuarioForm({ ...usuarioForm, activo: e.target.checked })}
+                className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+              />
+              <label htmlFor="activo" className="text-sm font-medium cursor-pointer">
+                Usuario activo
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">
+                {editando ? (
+                  <>
+                    <Edit className="w-4 h-4 mr-2" />
+                    Actualizar
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Crear Usuario
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

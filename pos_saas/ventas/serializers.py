@@ -1,7 +1,8 @@
 from rest_framework import serializers
-from .models import Venta, VentaDetalle, Mesa
+from drf_spectacular.utils import extend_schema_field
+from .models import Venta, VentaDetalle, Mesa, Comensal, PedidoDetalle, Pedido
 from productos.models  import Producto
-from restaurantes.models import UsuarioRestaurante, Restaurante
+from restaurantes.models import UsuarioRestaurante
 
 
 
@@ -75,3 +76,58 @@ class MesaSerializer(serializers.ModelSerializer):
             })
         
         return attrs
+    
+class ComensalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comensal
+        fields = ['id', 'mesa', 'nombre', 'creado']
+
+class PedidoDetalleSerializer(serializers.ModelSerializer):
+    producto = serializers.SerializerMethodField()
+    comensal = ComensalSerializer(read_only=True)
+    
+    class Meta:
+        model = PedidoDetalle
+        fields = ['id',
+            'pedido',
+            'producto',
+            'comensal',
+            'cantidad',
+            'precio_unitario',
+            'subtotal',
+            'observaciones',
+            'enviado_cocina',
+            'fecha']
+    
+    @extend_schema_field({
+        'type': 'object',
+        'properties': {
+            'id': {'type': 'integer'},
+            'nombre': {'type': 'string'},
+            'descripcion': {'type': 'string'},
+            'precio': {'type': 'number', 'format': 'float'}
+        }
+    })
+    def get_producto(self, obj):
+        return {
+            'id': obj.producto.id,
+            'nombre': obj.producto.nombre,
+            'descripcion': obj.producto.descripcion,
+            'precio': float(obj.producto.precio)
+        }
+        
+class PedidoSerializer(serializers.ModelSerializer):
+    comensales = ComensalSerializer(many=True, read_only=True)
+    items = PedidoDetalleSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Pedido
+        fields = [
+            'id',
+            'restaurante',
+            'mesa',
+            'estado',
+            'creado',
+            'comensales',
+            'items'
+        ]   

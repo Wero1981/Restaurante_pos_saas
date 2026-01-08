@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ChevronRight, ChevronDown, Plus, Search, Edit, Trash2, FolderPlus, ShoppingCart } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Search, ShoppingCart, X } from "lucide-react";
 
 export default function Productos() {
   const navigate = useNavigate();
@@ -22,21 +22,6 @@ export default function Productos() {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [expandidos, setExpandidos] = useState({});
-  
-  // Dialogs
-  const [dialogCategoria, setDialogCategoria] = useState(false);
-  const [dialogProducto, setDialogProducto] = useState(false);
-  
-  // Forms
-  const [categoriaForm, setCategoriaForm] = useState({ nombre: '', parent: null });
-  const [productoForm, setProductoForm] = useState({
-    nombre: '',
-    descripcion: '',
-    precio: '',
-    stock: 0,
-    categoria: null,
-    activo: true
-  });
   const cargarProductos = async () => {
     try {
       const res = await api.get('/productos/');
@@ -62,40 +47,6 @@ export default function Productos() {
     cargarCategorias();
     cargarProductos();
   }, []);
-  
-  const guardarCategoria = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post('/productos/categorias/', categoriaForm);
-      setCategoriaForm({ nombre: '', parent: null });
-      setDialogCategoria(false);
-      cargarCategorias();
-    } catch (error) {
-      console.error('Error guardando categoría:', error);
-    }
-  };
-
-  const guardarProducto = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post('/productos/', {
-        ...productoForm,
-        categoria: categoriaSeleccionada || productoForm.categoria
-      });
-      setProductoForm({
-        nombre: '',
-        descripcion: '',
-        precio: '',
-        stock: 0,
-        categoria: null,
-        activo: true
-      });
-      setDialogProducto(false);
-      cargarProductos();
-    } catch (error) {
-      console.error('Error guardando producto:', error);
-    }
-  };
 
   const toggleExpanded = (id) => {
     setExpandidos(prev => ({ ...prev, [id]: !prev[id] }));
@@ -130,17 +81,7 @@ export default function Productos() {
           )}
           <i className="fas fa-folder text-orange-500"></i>
           <span className="flex-1 font-medium text-sm">{cat.nombre}</span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setCategoriaForm({ nombre: '', parent: cat.id });
-              setDialogCategoria(true);
-            }}
-            className="p-1 hover:bg-gray-200 rounded"
-            title="Agregar subcategoría"
-          >
-            <FolderPlus className="w-4 h-4 text-gray-600" />
-          </button>
+
         </div>
         {expandidos[cat.id] && cat.subcategorias && renderArbolCategorias(cat.subcategorias, level + 1)}
       </div>
@@ -197,20 +138,10 @@ export default function Productos() {
       {/* Layout Principal */}
       <div className="flex gap-4 flex-1 overflow-hidden">
         {/* Panel Izquierdo - Categorías */}
-        <Card className="w-80 flex flex-col">
+        <Card className="w-64 flex flex-col">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-lg">Categorías</h3>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setCategoriaForm({ nombre: '', parent: null });
-                  setDialogCategoria(true);
-                }}
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Nueva
-              </Button>
             </div>
 
             <div
@@ -229,7 +160,7 @@ export default function Productos() {
           </CardContent>
         </Card>
 
-        {/* Panel Derecho - Productos */}
+        {/* Panel Central - Productos */}
         <Card className="flex-1 flex flex-col">
           <CardContent className="p-4 flex flex-col h-full">
             {/* Barra de búsqueda y acciones */}
@@ -243,10 +174,7 @@ export default function Productos() {
                   className="pl-10"
                 />
               </div>
-              <Button onClick={() => setDialogProducto(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Nuevo Producto
-              </Button>
+
             </div>
 
             {/* Tabla de Productos */}
@@ -312,12 +240,7 @@ export default function Productos() {
                               </Button>
                             ) : (
                               <>
-                                <button className="p-1 hover:bg-gray-200 rounded">
-                                  <Edit className="w-4 h-4 text-blue-600" />
-                                </button>
-                                <button className="p-1 hover:bg-gray-200 rounded">
-                                  <Trash2 className="w-4 h-4 text-red-600" />
-                                </button>
+                                <span className="text-xs text-gray-400">-</span>
                               </>
                             )}
                           </div>
@@ -335,130 +258,76 @@ export default function Productos() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Panel Derecho - Carrito/Comando */}
+        {mesaSeleccionada && (
+          <Card className="w-80 flex flex-col">
+            <CardContent className="p-4 flex flex-col h-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-lg">Comando Actual</h3>
+                <span className="text-sm text-gray-500">Mesa {mesaSeleccionada.numero}</span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-2">
+                {carrito.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                    <ShoppingCart className="w-12 h-12 mb-2" />
+                    <p className="text-sm text-center">No hay productos agregados</p>
+                  </div>
+                ) : (
+                  carrito.map((item, index) => (
+                    <div key={index} className="bg-gray-50 rounded-lg p-3 border">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{item.nombre}</p>
+                          {item.descripcion && (
+                            <p className="text-xs text-gray-500 mt-1">{item.descripcion}</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            // Remover del carrito
+                            const nuevoCarrito = [...carrito];
+                            nuevoCarrito.splice(index, 1);
+                            // Aquí necesitarías una función setCarrito del contexto
+                          }}
+                          className="ml-2 p-1 hover:bg-red-100 rounded text-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-600">Cantidad: {item.cantidad || 1}</span>
+                        <span className="font-semibold text-orange-600">
+                          ${(parseFloat(item.precio) * (item.cantidad || 1)).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {carrito.length > 0 && (
+                <div className="mt-4 pt-4 border-t space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-lg">Total:</span>
+                    <span className="font-bold text-xl text-orange-600">
+                      ${carrito.reduce((sum, item) => sum + (parseFloat(item.precio) * (item.cantidad || 1)), 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <Button 
+                    onClick={irACaja}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-2" />
+                    Procesar Comando ({carrito.length})
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
-
-      {/* Dialog Crear Categoría */}
-      <Dialog open={dialogCategoria} onOpenChange={setDialogCategoria}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {categoriaForm.parent ? 'Nueva Subcategoría' : 'Nueva Categoría'}
-            </DialogTitle>
-            <DialogDescription>
-              Crea una nueva categoría para organizar tus productos
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={guardarCategoria} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Nombre de la categoría *</label>
-              <Input
-                placeholder="Ej: Bebidas, Entradas, Platos Fuertes..."
-                value={categoriaForm.nombre}
-                onChange={(e) => setCategoriaForm({ ...categoriaForm, nombre: e.target.value })}
-                required
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setDialogCategoria(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit">
-                <Plus className="w-4 h-4 mr-2" />
-                Crear Categoría
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog Crear Producto */}
-      <Dialog open={dialogProducto} onOpenChange={setDialogProducto}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Nuevo Producto</DialogTitle>
-            <DialogDescription>
-              Completa la información del producto
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={guardarProducto} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Nombre *</label>
-                <Input
-                  placeholder="Nombre del producto"
-                  value={productoForm.nombre}
-                  onChange={(e) => setProductoForm({ ...productoForm, nombre: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Precio *</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={productoForm.precio}
-                  onChange={(e) => setProductoForm({ ...productoForm, precio: e.target.value })}
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Descripción</label>
-              <textarea
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                rows="3"
-                placeholder="Descripción del producto"
-                value={productoForm.descripcion}
-                onChange={(e) => setProductoForm({ ...productoForm, descripcion: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Stock inicial</label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={productoForm.stock}
-                  onChange={(e) => setProductoForm({ ...productoForm, stock: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Categoría</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  value={productoForm.categoria || ''}
-                  onChange={(e) => setProductoForm({ ...productoForm, categoria: e.target.value ? parseInt(e.target.value) : null })}
-                >
-                  <option value="">Sin categoría</option>
-                  {categorias.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="activo"
-                checked={productoForm.activo}
-                onChange={(e) => setProductoForm({ ...productoForm, activo: e.target.checked })}
-                className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
-              />
-              <label htmlFor="activo" className="text-sm font-medium">Producto activo</label>
-            </div>
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={() => setDialogProducto(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit">
-                <Plus className="w-4 h-4 mr-2" />
-                Crear Producto
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

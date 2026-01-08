@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Restaurante
+from .models import Restaurante, UsuarioRestaurante
 from configuraciones.models import Configuracion
 from configuraciones.serializer import ConfiguracionSerializer
 
@@ -44,4 +44,23 @@ class RestauranteSerializer(serializers.ModelSerializer):
         return instance
     
 
+class UsuarioRestauranteSerializer(serializers.ModelSerializer):
+    """Serializer para usuarios del restaurante con información completa del usuario."""
+    email = serializers.EmailField(source='usuario.email', read_only=True)
+    nombre = serializers.CharField(source='usuario.nombre', read_only=True)
+    apellido = serializers.CharField(source='usuario.apellidoP', read_only=True)
+    
+    class Meta:
+        model = UsuarioRestaurante
+        fields = [
+            'id',
+            'usuario',
+            'email',
+            'nombre',
+            'apellido',
+            'rol',
+            'activo',
+            'created_at'
+        ]
+        read_only_fields = ['id', 'usuario', 'created_at']
     

@@ -7,7 +7,9 @@ export default function Sidebar() {
   
   const menuItems = [
     { path: '/productos', icon: 'fa-box', label: 'Productos' },
+    { path: '/inventario', icon: 'fa-warehouse', label: 'Inventario' },
     { path: '/mesas', icon: 'fa-table', label: 'Mesas' },
+    { path: '/usuarios', icon: 'fa-users', label: 'Usuarios' },
     { path: '/caja', icon: 'fa-cash-register', label: 'Caja' },
     { path: '/restaurante', icon: 'fa-store', label: 'Restaurante' }
   ];

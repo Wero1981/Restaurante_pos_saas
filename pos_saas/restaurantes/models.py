@@ -19,10 +19,14 @@ class Restaurante(models.Model):
 class UsuarioRestaurante(models.Model):
     ADMIN = 'admin'
     CAJERO = 'cajero'
+    MESERO = 'mesero'
+    COCINERO = 'cocinero'
 
     ROLES = [
         (ADMIN, 'Administrador'),
         (CAJERO, 'Cajero'),
+        (MESERO, 'Mesero'),
+        (COCINERO, 'Cocinero'),
     ]
 
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
@@ -30,3 +34,6 @@ class UsuarioRestaurante(models.Model):
     rol = models.CharField(max_length=10, choices=ROLES)
     activo = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('usuario', 'restaurante')

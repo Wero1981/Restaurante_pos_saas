@@ -12,6 +12,8 @@ export const usePOS = () => {
 
 export const POSProvider = ({ children }) => {
   const [mesaSeleccionada, setMesaSeleccionada] = useState(null);
+  const [pedidoActivo, setPedidoActivo] = useState(null);
+  const [comensalSeleccionado, setComensalSeleccionado] = useState(null);
   const [carrito, setCarrito] = useState([]);
 
   // Calcular el total del carrito
@@ -94,15 +96,34 @@ export const POSProvider = ({ children }) => {
     setMesaSeleccionada(null);
   }, []);
 
+  // Establecer pedido activo
+  const establecerPedidoActivo = useCallback((pedido) => {
+    setPedidoActivo(pedido);
+  }, []);
+
+  // Seleccionar comensal
+  const seleccionarComensal = useCallback((comensal) => {
+    setComensalSeleccionado(comensal);
+  }, []);
+
+  // Limpiar comensal
+  const limpiarComensal = useCallback(() => {
+    setComensalSeleccionado(null);
+  }, []);
+
   // Resetear todo
   const resetearPOS = useCallback(() => {
     setMesaSeleccionada(null);
+    setPedidoActivo(null);
+    setComensalSeleccionado(null);
     setCarrito([]);
   }, []);
 
   const value = {
     // Estado
     mesaSeleccionada,
+    pedidoActivo,
+    comensalSeleccionado,
     carrito,
     total,
     
@@ -117,6 +138,13 @@ export const POSProvider = ({ children }) => {
     // Acciones de mesa
     seleccionarMesa,
     limpiarMesa,
+    
+    // Acciones de pedido
+    establecerPedidoActivo,
+    
+    // Acciones de comensal
+    seleccionarComensal,
+    limpiarComensal,
     
     // Reset general
     resetearPOS,

@@ -28,6 +28,8 @@ urlpatterns = [
     path("api/productos/", include("productos.urls")),
     path("api/ventas/", include("ventas.urls")),
     path("api/mesas/", include("ventas.mesas_urls")),
+    path("api/pedidos/", include("ventas.pedidos_urls")),
+    path("api/comensales/", include("ventas.comensales_urls")),
     path("api/caja/", include("caja.urls")),
     
     # Swagger/OpenAPI Documentation
