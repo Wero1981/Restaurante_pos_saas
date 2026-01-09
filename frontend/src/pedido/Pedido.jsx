@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import api from '../services/api';
 import { usePOS } from '../context/POSContext';
 import { Button } from "@/components/ui/button";
@@ -117,13 +118,23 @@ export default function Pedido() {
       setDialogComensal(false);
     } catch (error) {
       console.error('Error agregando comensales:', error);
-      alert('Error al agregar comensales');
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Error al agregar comensales',
+        confirmButtonColor: '#f97316'
+      });
     }
   };
 
   const agregarProductoAlPedido = (producto) => {
     if (!comensalSeleccionado) {
-      alert('Por favor selecciona un comensal primero');
+      Swal.fire({
+        icon: 'warning',
+        title: 'Atención',
+        text: 'Por favor selecciona un comensal primero',
+        confirmButtonColor: '#f97316'
+      });
       return;
     }
     
@@ -153,7 +164,12 @@ export default function Pedido() {
       cargarDetallesPedido();
     } catch (error) {
       console.error('Error agregando producto:', error);
-      alert('Error al agregar producto al pedido');
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Error al agregar producto al pedido',
+        confirmButtonColor: '#f97316'
+      });
     }
   };
 
@@ -173,16 +189,25 @@ export default function Pedido() {
       setObservacionesProducto('');
     } catch (error) {
       console.error('Error agregando producto:', error);
-      alert('Error al agregar producto al pedido');
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Error al agregar producto al pedido',
+        confirmButtonColor: '#f97316'
+      });
     }
   };
 
   const enviarACocina = async () => {
     try {
       const pendientes = detallesPedido.filter(d => d.enviado_cocina !== true);
-      console.log(detallesPedido);
       if (pendientes.length === 0) {
-        alert('No hay productos pendientes para enviar a cocina');
+        Swal.fire({
+          icon: 'info',
+          title: 'Información',
+          text: 'No hay productos pendientes para enviar a cocina',
+          confirmButtonColor: '#f97316'
+        });
         return;
       }
 
@@ -190,11 +215,22 @@ export default function Pedido() {
         pedido_id: pedidoActivo.id
       });
       
-      alert('Productos enviados a cocina exitosamente');
+      Swal.fire({
+        icon: 'success',
+        title: '¡Enviado!',
+        text: 'Productos enviados a cocina exitosamente',
+        confirmButtonColor: '#f97316',
+        timer: 2000
+      });
       cargarDetallesPedido();
     } catch (error) {
       console.error('Error enviando a cocina:', error);
-      alert('Error al enviar productos a cocina');
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Error al enviar productos a cocina',
+        confirmButtonColor: '#f97316'
+      });
     }
   };
 
@@ -261,8 +297,19 @@ export default function Pedido() {
     return detallesPedido.reduce((sum, detalle) => sum + parseFloat(detalle.subtotal || 0), 0);
   };
 
-  const volverAMesas = () => {
-    if (confirm('¿Deseas volver a la lista de mesas? Los cambios no enviados a cocina se perderán.')) {
+  const volverAMesas = async () => {
+    const result = await Swal.fire({
+      icon: 'question',
+      title: '¿Volver a mesas?',
+      text: 'Los cambios no enviados a cocina se perderán',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, volver',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#f97316',
+      cancelButtonColor: '#6b7280'
+    });
+    
+    if (result.isConfirmed) {
       resetearPOS();
       navigate('/mesas');
     }
@@ -372,9 +419,16 @@ export default function Pedido() {
             <div className="flex-1 overflow-auto">
               <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {productosFiltrados.map(producto => {
-                  const stock = parseFloat(producto.stock);
-                  const tieneStock = stock > 0 || stock === -1;
-                  const sinStock = stock <= 0 && stock !== -1;
+                  // Convertir stock a número y manejar diferentes formatos
+                  const stockRaw = producto.stock;
+                  const stockNumerico = stockRaw !== null && stockRaw !== undefined && stockRaw !== '' 
+                    ? Number(stockRaw) 
+                    : 0;
+                  
+                  // Stock ilimitado puede ser -1 o valores muy grandes
+                  const esStockIlimitado = stockNumerico === -1 || stockNumerico < -0.5;
+                  const tieneStock = esStockIlimitado || stockNumerico > 0;
+                  const sinStock = !tieneStock;
                   
                   return (
                     <button
@@ -398,7 +452,7 @@ export default function Pedido() {
                         {sinStock && (
                           <span className="text-xs text-red-600 font-medium">Sin stock</span>
                         )}
-                        {stock === -1 && (
+                        {esStockIlimitado && (
                           <span className="text-xs text-green-600 font-medium">∞</span>
                         )}
                       </div>
@@ -509,9 +563,9 @@ export default function Pedido() {
                     step={['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) ? "0.001" : "1"}
                     min={['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) ? "0.001" : "1"}
                     max={
-                        parseFloat(productoSeleccionado?.stock) === -1
+                        productoSeleccionado?.stock && Number(productoSeleccionado.stock) < -0.5
                         ? undefined
-                        : productoSeleccionado?.stock || 1
+                        : (productoSeleccionado?.stock ? Number(productoSeleccionado.stock) : 1)
                     }
                     value={cantidadProducto}
                     onChange={(e) => {
@@ -533,7 +587,7 @@ export default function Pedido() {
                     onFocus={(e) => e.target.select()}
                     autoFocus
 />
-              {parseFloat(productoSeleccionado?.stock) === -1 && (
+              {productoSeleccionado?.stock && Number(productoSeleccionado.stock) < -0.5 && (
                 <p className="text-xs text-green-600 mt-1">∞ Stock ilimitado</p>
               )}
               {['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) && (

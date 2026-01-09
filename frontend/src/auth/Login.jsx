@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from '../services/api';
 import { useNavigate, Link } from "react-router-dom";
+import { usePOS } from '../context/POSContext';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,14 +12,31 @@ export default function Login() {
     const [data, setData] = useState({});
     const [error, setError] = useState("");
     const navigate = useNavigate();
+    const { cargarUsuarioYPermisos } = usePOS();
 
     const handleLogin = async (e) => {
         e.preventDefault();
         setError("");
         try {
             const response = await api.post('/usuarios/login/', data);
+            
+            // Guardar token
             localStorage.setItem('token', response.data.access);
-            //get datos de usuarios
+            
+            // Guardar información del usuario (ya incluye rol y permisos)
+            const userInfo = response.data.user;
+            localStorage.setItem('user', JSON.stringify(userInfo));
+            
+            // Guardar ID del restaurante si existe
+            if (userInfo.restaurante_id) {
+                localStorage.setItem('restaurante_id', userInfo.restaurante_id);
+            }
+            
+            console.log('✅ Login exitoso. Usuario guardado:', userInfo);
+            
+            // Cargar permisos del usuario en el contexto
+            await cargarUsuarioYPermisos();
+            
             navigate('/productos');
         } catch (error) {
             console.error("Login failed:", error);

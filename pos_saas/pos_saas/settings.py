@@ -181,4 +181,5 @@ CORS_ALLOW_HEADERS = [
     "user-agent",
     "x-csrftoken",
     "x-requested-with",
+    "x-restaurante-id",  # Header personalizado para ID del restaurante
 ]

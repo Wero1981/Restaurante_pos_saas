@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import api from '../services/api';
 
 const POSContext = createContext();
 
@@ -11,10 +12,63 @@ export const usePOS = () => {
 };
 
 export const POSProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [userRol, setUserRol] = useState(null);
+  const [permisos, setPermisos] = useState([]);
   const [mesaSeleccionada, setMesaSeleccionada] = useState(null);
   const [pedidoActivo, setPedidoActivo] = useState(null);
   const [comensalSeleccionado, setComensalSeleccionado] = useState(null);
   const [carrito, setCarrito] = useState([]);
+
+  // Cargar usuario y permisos al montar el componente
+  useEffect(() => {
+    // Solo cargar si hay token (sesión activa)
+    const token = localStorage.getItem('token');
+    if (token) {
+      cargarUsuarioYPermisos();
+    }
+  }, []);
+
+  // Cargar permisos del usuario autenticado desde localStorage
+  const cargarUsuarioYPermisos = async () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      
+      if (userStr) {
+        const userData = JSON.parse(userStr);
+        setUser(userData);
+        
+        // Obtener rol y permisos directamente del localStorage (ya vienen del login)
+        if (userData.rol) {
+          setUserRol(userData.rol);
+        }
+        
+        if (userData.permisos && Array.isArray(userData.permisos)) {
+          const codigosPermisos = userData.permisos.map(p => p.codigo);
+          setPermisos(codigosPermisos);
+        } else {
+          setPermisos([]);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error cargando datos del usuario:', error);
+      setPermisos([]);
+    }
+  };
+
+  // Verificar si el usuario tiene un permiso específico
+  const tienePermiso = useCallback((codigoPermiso) => {
+    // Si es admin, tiene acceso a todo
+    if (userRol === 'admin') {
+      return true;
+    }
+    // Si tiene 'todos_los_permisos', puede hacer todo
+    if (permisos.includes('todos_los_permisos')) {
+      return true;
+    }
+    // Verificar permiso específico
+    return permisos.includes(codigoPermiso);
+  }, [permisos, userRol]);
 
   // Calcular el total del carrito
   const total = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
@@ -119,7 +173,26 @@ export const POSProvider = ({ children }) => {
     setCarrito([]);
   }, []);
 
+  // Cerrar sesión y limpiar todo
+  const cerrarSesion = useCallback(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('restaurante_id');
+    setUser(null);
+    setUserRol(null);
+    setPermisos([]);
+    resetearPOS();
+  }, [resetearPOS]);
+
   const value = {
+    // Usuario y permisos
+    user,
+    userRol,
+    permisos,
+    tienePermiso,
+    cargarUsuarioYPermisos,
+    cerrarSesion,
+    
     // Estado
     mesaSeleccionada,
     pedidoActivo,

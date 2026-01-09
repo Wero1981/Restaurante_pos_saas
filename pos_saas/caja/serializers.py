@@ -4,6 +4,7 @@ from .models import Caja
 class CajaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Caja
-        fields = '__all__'
-        read_only_fields = ['restaurant', 'fecha_apertura', 'fecha_cierre']
+        fields = ['id', 'restaurante', 'usuario', 'monto_inicial', 'monto_final', 
+                  'fecha_apertura', 'fecha_cierre', 'abierta']
+        read_only_fields = ['id', 'fecha_apertura']
 

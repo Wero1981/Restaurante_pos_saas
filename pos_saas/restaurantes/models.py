@@ -32,8 +32,19 @@ class UsuarioRestaurante(models.Model):
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
     restaurante = models.ForeignKey(Restaurante, on_delete=models.CASCADE)
     rol = models.CharField(max_length=10, choices=ROLES)
+
+    permisos = models.ManyToManyField('Permiso', blank=True, related_name='usuarios_restaurante')
+
     activo = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = ('usuario', 'restaurante')
+
+class Permiso(models.Model):
+    codigo = models.CharField(max_length=50, unique=True)
+    descripcion = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.codigo
+    

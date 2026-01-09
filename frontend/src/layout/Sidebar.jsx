@@ -1,17 +1,24 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
+import { usePOS } from '@/context/POSContext';
+import { ConPermiso } from '@/components/ConPermiso';
+
 
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { userRol } = usePOS();
   
-  const menuItems = [
+  const menuItems = [ 
     { path: '/productos', icon: 'fa-box', label: 'Productos' },
     { path: '/inventario', icon: 'fa-warehouse', label: 'Inventario' },
     { path: '/mesas', icon: 'fa-table', label: 'Mesas' },
     { path: '/usuarios', icon: 'fa-users', label: 'Usuarios' },
     { path: '/caja', icon: 'fa-cash-register', label: 'Caja' },
-    { path: '/restaurante', icon: 'fa-store', label: 'Restaurante' }
+    ...(userRol === 'admin' ? [
+      { path: '/restaurantes', icon: 'fa-store', label: 'Restaurantes' },
+      { path: '/restaurante', icon: 'fa-cog', label: 'Configuración' }
+    ] : [])
   ];
   
   const handleLogout = () => {

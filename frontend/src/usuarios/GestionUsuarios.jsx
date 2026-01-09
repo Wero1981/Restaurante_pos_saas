@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import Swal from 'sweetalert2';
 import api from '../services/api';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -11,20 +13,26 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Plus, Search, Edit, Trash2, Users, Mail, Shield } from "lucide-react";
+import { usePOS } from '@/context/POSContext';
+import { ConPermiso } from '@/components/ConPermiso';
 
 export default function GestionUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editando, setEditando] = useState(null);
+  const [permisos, setPermisos] = useState([]);
   const [usuarioForm, setUsuarioForm] = useState({
     email: '',
     nombre: '',
     apellido: '',
     password: '',
     rol: 'mesero',
+    permisos_ids: [],
     activo: true
   });
+  const { tienePermiso, userRol } = usePOS();
+
 
   const cargarUsuarios = async () => {
     try {
@@ -38,7 +46,18 @@ export default function GestionUsuarios() {
 
   useEffect(() => {
     cargarUsuarios();
+    cargarPermisos();
   }, []);
+
+  const cargarPermisos = async () => {
+    try {
+      const res = await api.get('/restaurantes/permisos/');
+      setPermisos(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.error('Error cargando permisos:', error);
+      setPermisos([]);
+    }
+  };
 
   const guardarUsuario = async (e) => {
     e.preventDefault();
@@ -59,23 +78,59 @@ export default function GestionUsuarios() {
       setDialogOpen(false);
       resetForm();
       cargarUsuarios();
+      
+      Swal.fire({
+        icon: 'success',
+        title: editando ? '¡Actualizado!' : '¡Creado!',
+        text: `Usuario ${editando ? 'actualizado' : 'creado'} exitosamente`,
+        confirmButtonColor: '#f97316',
+        timer: 2000
+      });
     } catch (error) {
       console.error('Error guardando usuario:', error);
       const errorMsg = error.response?.data?.email?.[0] || 
                        error.response?.data?.detail ||
                        'Error al guardar usuario';
-      alert(errorMsg);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: errorMsg,
+        confirmButtonColor: '#f97316'
+      });
     }
   };
 
   const eliminarUsuario = async (id) => {
-    if (confirm('¿Estás seguro de eliminar este usuario?')) {
+    const result = await Swal.fire({
+      icon: 'question',
+      title: '¿Eliminar usuario?',
+      text: 'Esta acción desactivará el usuario',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#f97316',
+      cancelButtonColor: '#6b7280'
+    });
+    
+    if (result.isConfirmed) {
       try {
         await api.delete(`/restaurantes/usuarios/${id}/`);
         cargarUsuarios();
+        Swal.fire({
+          icon: 'success',
+          title: '¡Eliminado!',
+          text: 'Usuario desactivado exitosamente',
+          confirmButtonColor: '#f97316',
+          timer: 2000
+        });
       } catch (error) {
         console.error('Error eliminando usuario:', error);
-        alert('Error al eliminar usuario');
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Error al eliminar usuario',
+          confirmButtonColor: '#f97316'
+        });
       }
     }
   };
@@ -94,6 +149,7 @@ export default function GestionUsuarios() {
       apellido: usuario.apellido || '',
       password: '', // No mostrar password al editar
       rol: usuario.rol || 'mesero',
+      permisos_ids: usuario.permisos_detalle?.map(p => p.id) || [],
       activo: usuario.activo !== undefined ? usuario.activo : true
     });
     setDialogOpen(true);
@@ -106,9 +162,19 @@ export default function GestionUsuarios() {
       apellido: '',
       password: '',
       rol: 'mesero',
+      permisos_ids: [],
       activo: true
     });
     setEditando(null);
+  };
+
+  const togglePermiso = (permisoId) => {
+    setUsuarioForm(prev => {
+      const permisos = prev.permisos_ids.includes(permisoId)
+        ? prev.permisos_ids.filter(id => id !== permisoId)
+        : [...prev.permisos_ids, permisoId];
+      return { ...prev, permisos_ids: permisos };
+    });
   };
 
   const usuariosFiltrados = usuarios.filter(u => {
@@ -171,10 +237,24 @@ export default function GestionUsuarios() {
                 className="pl-10"
               />
             </div>
-            <Button onClick={abrirDialogNuevo}>
-              <Plus className="w-4 h-4 mr-2" />
-              Nuevo Usuario
-            </Button>
+            
+            {/* Mostrar botón siempre si es admin O tiene permiso */}
+            {(userRol === 'admin' || tienePermiso('administrar_usuarios')) && (
+              <Button onClick={abrirDialogNuevo}>
+                <Plus className="w-4 h-4 mr-2" />
+                Nuevo Usuario
+              </Button>
+            )}
+            
+            {/* Alternativa: Mostrar botón solo si tiene permiso */}
+            {(userRol === 'admin' || tienePermiso('administrar_usuarios'))  && (
+              <Button onClick={abrirDialogNuevo}>
+                <Plus className="w-4 h-4 mr-2" />
+                Nuevo Usuario
+              </Button>
+            )}
+        
+           
           </div>
 
           {/* Tabla de Usuarios */}
@@ -185,6 +265,7 @@ export default function GestionUsuarios() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Permisos</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                 </tr>
@@ -192,7 +273,7 @@ export default function GestionUsuarios() {
               <tbody className="divide-y divide-gray-200 bg-white">
                 {usuariosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
                       <Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
                       <p>No hay usuarios para mostrar</p>
                     </td>
@@ -218,6 +299,22 @@ export default function GestionUsuarios() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {usuario.permisos_detalle && usuario.permisos_detalle.length > 0 ? (
+                            usuario.permisos_detalle.slice(0, 2).map(permiso => (
+                              <span key={permiso.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800">
+                                {permiso.descripcion}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-gray-400">Sin permisos</span>
+                          )}
+                          {usuario.permisos_detalle && usuario.permisos_detalle.length > 2 && (
+                            <span className="text-xs text-gray-500">+{usuario.permisos_detalle.length - 2}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                           usuario.activo ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                         }`}>
@@ -226,20 +323,24 @@ export default function GestionUsuarios() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button 
-                            onClick={() => abrirDialogEditar(usuario)}
-                            className="p-1 hover:bg-blue-100 rounded"
-                            title="Editar usuario"
-                          >
-                            <Edit className="w-4 h-4 text-blue-600" />
-                          </button>
-                          <button 
-                            onClick={() => eliminarUsuario(usuario.id)}
-                            className="p-1 hover:bg-red-100 rounded"
-                            title="Eliminar usuario"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </button>
+                          <ConPermiso permiso="administrar_usuarios">
+                            <button 
+                              onClick={() => abrirDialogEditar(usuario)}
+                              className="p-1 hover:bg-blue-100 rounded"
+                              title="Editar usuario"
+                            >
+                              <Edit className="w-4 h-4 text-blue-600" />
+                            </button>
+                          </ConPermiso>
+                          <ConPermiso permiso="administrar_usuarios">
+                            <button 
+                              onClick={() => eliminarUsuario(usuario.id)}
+                              className="p-1 hover:bg-red-100 rounded"
+                              title="Eliminar usuario"
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </button>
+                          </ConPermiso>
                         </div>
                       </td>
                     </tr>
@@ -258,7 +359,7 @@ export default function GestionUsuarios() {
 
       {/* Dialog Crear/Editar Usuario */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editando ? 'Editar Usuario' : 'Nuevo Usuario'}
@@ -327,6 +428,35 @@ export default function GestionUsuarios() {
                 <option value="gerente">Gerente</option>
                 <option value="admin">Administrador</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-3">Permisos</label>
+              <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2 bg-gray-50">
+                {permisos.length === 0 ? (
+                  <p className="text-xs text-gray-500 text-center py-2">No hay permisos disponibles</p>
+                ) : (
+                  permisos.map(permiso => (
+                    <div key={permiso.id} className="flex items-start space-x-2">
+                      <Checkbox
+                        id={`permiso-${permiso.id}`}
+                        checked={usuarioForm.permisos_ids.includes(permiso.id)}
+                        onCheckedChange={() => togglePermiso(permiso.id)}
+                      />
+                      <label
+                        htmlFor={`permiso-${permiso.id}`}
+                        className="text-sm cursor-pointer flex-1"
+                      >
+                        <div className="font-medium">{permiso.descripcion}</div>
+                        <div className="text-xs text-gray-500">{permiso.codigo}</div>
+                      </label>
+                    </div>
+                  ))
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Selecciona los permisos específicos para este usuario
+              </p>
             </div>
 
             <div className="flex items-center gap-2">

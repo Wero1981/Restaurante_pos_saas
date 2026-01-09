@@ -5,9 +5,10 @@ from rest_framework.decorators import action
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
-from .models import Restaurante, UsuarioRestaurante
-from .serializer import RestauranteSerializer, UsuarioRestauranteSerializer
+from .models import Restaurante, UsuarioRestaurante, Permiso
+from .serializer import RestauranteSerializer, UsuarioRestauranteSerializer, PermisoSerializer
 from usuarios.models import Usuario
+from core.permissions import TienePermisoRestaurante
 
 @extend_schema_view(
     retrieve=extend_schema(
@@ -58,7 +59,8 @@ from usuarios.models import Usuario
 )
 class RestauranteViewSet(viewsets.ModelViewSet):
     serializer_class = RestauranteSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, TienePermisoRestaurante]
+    permiso_requerido = None  # Sin permiso específico, solo autenticado
 
     def get_queryset(self):
         """Obtiene el restaurante asociado al usuario autenticado."""
@@ -159,7 +161,8 @@ class RestauranteViewSet(viewsets.ModelViewSet):
 class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar usuarios del restaurante."""
     serializer_class = UsuarioRestauranteSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, TienePermisoRestaurante]
+    permiso_requerido = 'administrar_usuarios'
 
     def get_queryset(self):
         """Obtiene los usuarios del restaurante asociado al usuario autenticado."""
@@ -210,6 +213,11 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
                     activo=request.data.get('activo', True)
                 )
                 
+                # Asignar permisos si se proporcionaron
+                if 'permisos_ids' in request.data:
+                    permisos_ids = request.data.get('permisos_ids', [])
+                    usuario_restaurante.permisos.set(permisos_ids)
+                
                 serializer = self.get_serializer(usuario_restaurante)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
                 
@@ -253,6 +261,12 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
                     instance.rol = request.data['rol']
                 if 'activo' in request.data:
                     instance.activo = request.data['activo']
+                    
+                # Actualizar permisos si se proporcionaron
+                if 'permisos_ids' in request.data:
+                    permisos_ids = request.data.get('permisos_ids', [])
+                    instance.permisos.set(permisos_ids)
+                    
                 instance.save()
                 
                 serializer = self.get_serializer(instance)
@@ -270,3 +284,14 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
         instance.activo = False
         instance.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema_view(
+    list=extend_schema(description="Lista todos los permisos disponibles"),
+)
+
+class PermisoViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet de solo lectura para listar permisos disponibles."""
+    serializer_class = PermisoSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Permiso.objects.all()

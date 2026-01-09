@@ -73,7 +73,7 @@ class Venta(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 class VentaDetalle(models.Model):
-    venta = models.ForeignKey(Venta, on_delete=models.CASCADE)
+    venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name='detalles')
     comensal = models.ForeignKey(Comensal, on_delete=models.SET_NULL, null=True)
     producto = models.ForeignKey('productos.Producto', on_delete=models.CASCADE)
     cantidad = models.DecimalField(max_digits=10, decimal_places=3)

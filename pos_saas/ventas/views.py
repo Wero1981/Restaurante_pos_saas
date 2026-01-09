@@ -17,6 +17,7 @@ from .serializers import (
 )
 from restaurantes.models import UsuarioRestaurante
 from productos.models import Producto
+from core.permissions import TienePermisoRestaurante
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 
 

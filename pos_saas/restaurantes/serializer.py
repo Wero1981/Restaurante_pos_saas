@@ -1,7 +1,14 @@
 from rest_framework import serializers
-from .models import Restaurante, UsuarioRestaurante
+from .models import Restaurante, UsuarioRestaurante, Permiso
 from configuraciones.models import Configuracion
 from configuraciones.serializer import ConfiguracionSerializer
+
+
+class PermisoSerializer(serializers.ModelSerializer):
+    """Serializer para permisos."""
+    class Meta:
+        model = Permiso
+        fields = ['id', 'codigo', 'descripcion']
 
 class RestauranteSerializer(serializers.ModelSerializer):
     
@@ -49,6 +56,14 @@ class UsuarioRestauranteSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source='usuario.email', read_only=True)
     nombre = serializers.CharField(source='usuario.nombre', read_only=True)
     apellido = serializers.CharField(source='usuario.apellidoP', read_only=True)
+    permisos_detalle = PermisoSerializer(source='permisos', many=True, read_only=True)
+    permisos_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Permiso.objects.all(),
+        source='permisos',
+        write_only=True,
+        required=False
+    )
     
     class Meta:
         model = UsuarioRestaurante
@@ -59,6 +74,8 @@ class UsuarioRestauranteSerializer(serializers.ModelSerializer):
             'nombre',
             'apellido',
             'rol',
+            'permisos_detalle',
+            'permisos_ids',
             'activo',
             'created_at'
         ]
