@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ChevronRight, ChevronDown, Plus, Search, Users, Send, X, ArrowLeft, Receipt } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Search, Users, Send, X, ArrowLeft, Receipt, Folder, List } from "lucide-react";
 
 export default function Pedido() {
   const navigate = useNavigate();
@@ -179,7 +179,8 @@ export default function Pedido() {
 
   const enviarACocina = async () => {
     try {
-      const pendientes = detallesPedido.filter(d => !d.enviado_cocina);
+      const pendientes = detallesPedido.filter(d => d.enviado_cocina !== true);
+      console.log(detallesPedido);
       if (pendientes.length === 0) {
         alert('No hay productos pendientes para enviar a cocina');
         return;
@@ -228,7 +229,7 @@ export default function Pedido() {
           {(!cat.subcategorias || cat.subcategorias.length === 0) && (
             <span className="w-6"></span>
           )}
-          <i className="fas fa-folder text-orange-500"></i>
+          <Folder className="w-4 h-4 text-orange-500" />
           <span className="flex-1 font-medium text-sm">{cat.nombre}</span>
         </div>
         {expandidos[cat.id] && cat.subcategorias && renderArbolCategorias(cat.subcategorias, level + 1)}
@@ -343,7 +344,7 @@ export default function Pedido() {
                   !categoriaSeleccionada ? 'bg-orange-50 border-l-4 border-orange-500' : ''
                 }`}
               >
-                <i className="fas fa-list text-gray-600"></i>
+                <List className="w-4 h-4 text-gray-600" />
                 <span className="text-sm font-medium">Todos</span>
               </div>
               <div className="flex-1 overflow-y-auto border-t pt-2">
@@ -442,7 +443,7 @@ export default function Pedido() {
                                 📝 {detalle.observaciones}
                               </p>
                             )}
-                            {detalle.enviado_cocina && (
+                            {detalle.enviado_cocina === true && (
                               <span className="text-green-600 text-xs">✓ En cocina</span>
                             )}
                           </div>
@@ -459,9 +460,9 @@ export default function Pedido() {
                   </div>
                 ))
               )}
-            </div>
+              </div>
 
-            {detallesPedido.length > 0 && (
+              {detallesPedido.length > 0 && (
               <div className="mt-4 pt-4 border-t">
                 <div className="flex justify-between items-center mb-3">
                   <span className="font-bold text-xl">Total:</span>
@@ -470,7 +471,7 @@ export default function Pedido() {
                   </span>
                 </div>
                 <div className="text-xs text-gray-600">
-                  {detallesPedido.filter(d => d.enviado_cocina).length} de {detallesPedido.length} en cocina
+                  {detallesPedido.filter(d => d.enviado_cocina === true).length} de {detallesPedido.length} en cocina
                 </div>
               </div>
             )}
