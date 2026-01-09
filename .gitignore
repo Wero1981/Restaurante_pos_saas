@@ -84,3 +84,4 @@ coverage.xml
 # Migrations (opcional - comenta si quieres versionar migraciones)
 # */migrations/*.py
 # !*/migrations/__init__.py
+node_modules
