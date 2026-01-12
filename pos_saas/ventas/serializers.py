@@ -50,8 +50,15 @@ class VentaSerializer(serializers.ModelSerializer):
                 id=d['producto'].id,
                 restaurante=restaurante
             )
-            producto.stock -= d['cantidad']
-            producto.save()
+            
+            # Validar y decrementar stock (solo si no es ilimitado)
+            if producto.stock != -1:
+                if producto.stock < d['cantidad']:
+                    raise serializers.ValidationError(
+                        f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}"
+                    )
+                producto.stock -= d['cantidad']
+                producto.save()
 
             subtotal = d['cantidad'] * d['precio_unitario']
             VentaDetalle.objects.create(
@@ -92,11 +99,13 @@ class MesaSerializer(serializers.ModelSerializer):
         if 'nombre' in attrs and not attrs['nombre']:
             attrs.pop('nombre', None)
         
-        # Asegurarse de que al menos uno esté presente
-        if 'nombre' not in attrs or not attrs['nombre']:
-            raise serializers.ValidationError({
-                'numero': 'Este campo es requerido.'
-            })
+        # Solo validar nombre en creación (POST), no en actualización (PATCH/PUT)
+        if not self.instance:
+            # Asegurarse de que al menos uno esté presente al crear
+            if 'nombre' not in attrs or not attrs['nombre']:
+                raise serializers.ValidationError({
+                    'numero': 'Este campo es requerido.'
+                })
         
         return attrs
     

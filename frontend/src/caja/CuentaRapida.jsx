@@ -234,26 +234,28 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
             </div>
 
             {/* Filtro por categoría */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
               <Button
                 size="sm"
                 variant={categoriaSeleccionada === null ? 'default' : 'outline'}
                 onClick={() => setCategoriaSeleccionada(null)}
-                className={categoriaSeleccionada === null ? 'bg-orange-500' : ''}
+                className={`${categoriaSeleccionada === null ? 'bg-orange-500' : ''} flex-shrink-0`}
               >
                 Todos
               </Button>
-              {categorias.map(cat => (
-                <Button
-                  key={cat.id}
-                  size="sm"
-                  variant={categoriaSeleccionada === cat.id ? 'default' : 'outline'}
-                  onClick={() => setCategoriaSeleccionada(cat.id)}
-                  className={categoriaSeleccionada === cat.id ? 'bg-orange-500' : ''}
-                >
-                  {cat.nombre}
-                </Button>
-              ))}
+              {categorias
+                .filter(cat => productos.some(p => p.categoria === cat.id && p.activo))
+                .map(cat => (
+                  <Button
+                    key={cat.id}
+                    size="sm"
+                    variant={categoriaSeleccionada === cat.id ? 'default' : 'outline'}
+                    onClick={() => setCategoriaSeleccionada(cat.id)}
+                    className={`${categoriaSeleccionada === cat.id ? 'bg-orange-500' : ''} flex-shrink-0 whitespace-nowrap`}
+                  >
+                    {cat.nombre}
+                  </Button>
+                ))}
             </div>
           </div>
 

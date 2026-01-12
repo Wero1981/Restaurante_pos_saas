@@ -104,7 +104,7 @@ export default function Productos() {
   };
 
   return (
-    <div className="h-[calc(100vh-80px)] flex flex-col p-6">
+    <div className="h-[calc(100vh-80px)] flex flex-col pl-1">
       {/* Header */}
       <div className="mb-4">
         <div className="flex justify-between items-center">

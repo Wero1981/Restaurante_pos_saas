@@ -310,13 +310,8 @@ class AgregarProductoView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Verificar stock disponible si es necesario
-        # -1 significa stock ilimitado
-        if producto.stock != -1 and producto.stock < cantidad:
-            return Response(
-                {'error': f'Stock insuficiente. Disponible: {producto.stock}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # NOTA: La validación y decremento de stock se realiza al crear la venta final,
+        # no al agregar productos al pedido (ya que el pedido puede cancelarse)
 
         # Verificar comensal si se proporciona
         comensal = None
@@ -351,10 +346,8 @@ class AgregarProductoView(APIView):
                     enviado_cocina=False
                 )
 
-                # Actualizar stock del producto (solo si no es ilimitado)
-                if producto.stock != -1:
-                    producto.stock -= cantidad
-                    producto.save()
+                # NO decrementar stock aquí - se hará al crear la venta final
+                # El stock solo debe decrementarse cuando se cierra el pedido y se genera la venta
 
                 return Response({
                     'id': detalle.id,
@@ -505,6 +498,50 @@ class EnviarCocinaView(APIView):
         except Exception as e:
             return Response(
                 {'error': f'Error al enviar productos a cocina: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class EliminarDetalleView(APIView):
+    """Vista para eliminar un detalle específico del pedido."""
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, detalle_id):
+        """Elimina un detalle específico del pedido si no ha sido enviado a cocina."""
+        restaurante = get_restaurante_usuario(request.user)
+        if not restaurante:
+            return Response(
+                {'error': 'Usuario no está asociado a ningún restaurante'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Buscar el detalle y verificar permisos
+            detalle = PedidoDetalle.objects.select_related('pedido').get(
+                id=detalle_id,
+                pedido__restaurante=restaurante
+            )
+            
+            # No permitir eliminar si ya fue enviado a cocina
+            if detalle.enviado_cocina:
+                return Response(
+                    {'error': 'No se puede eliminar un producto que ya fue enviado a cocina'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Eliminar el detalle
+            detalle.delete()
+            
+            return Response(status=status.HTTP_204_NO_CONTENT)
+            
+        except PedidoDetalle.DoesNotExist:
+            return Response(
+                {'error': 'Detalle del pedido no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Error al eliminar detalle del pedido: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

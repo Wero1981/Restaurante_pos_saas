@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { usePOS } from '../context/POSContext';
 import Swal from 'sweetalert2';
@@ -22,7 +23,8 @@ import {
 } from "lucide-react";
 
 export default function Caja() {
-  // No se usan variables del contexto en esta versión
+  const navigate = useNavigate();
+  const { seleccionarMesa: seleccionarMesaContexto, establecerPedidoActivo } = usePOS();
 
   // Estados para caja
   const [cajaAbierta, setCajaAbierta] = useState(false);
@@ -133,9 +135,6 @@ export default function Caja() {
     try {
       setMesaSeleccionadaLocal(mesa);
       
-      console.log('Mesa seleccionada:', mesa);
-      console.log('Pedido de la mesa:', mesa.pedido);
-      
       // Cargar detalles del pedido
       if (mesa.pedido) {
         const res = await api.get(`/pedidos/${mesa.pedido.id}/`);
@@ -176,7 +175,6 @@ export default function Caja() {
         cantidad: 1
       }]);
     }
-    setDialogProductos(false);
   };
   
   const incrementarCantidadRapida = (productoId) => {
@@ -207,6 +205,24 @@ export default function Caja() {
     setModoCuentaRapida(false);
     setCarritoRapido([]);
     setBusquedaProducto('');
+  };
+  
+  // Función para abrir pedido con mesa seleccionada
+  const abrirPedidoConMesa = () => {
+    if (!mesaSeleccionadaLocal || !pedidoMesa) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Sin pedido',
+        text: 'Selecciona una mesa con pedido abierto',
+        confirmButtonColor: '#f97316'
+      });
+      return;
+    }
+    
+    // Guardar mesa y pedido en el contexto antes de navegar
+    seleccionarMesaContexto(mesaSeleccionadaLocal);
+    establecerPedidoActivo(pedidoMesa);
+    navigate('/pedido');
   };
 
   const verificarCajaAbierta = async (restauranteId) => {
@@ -614,6 +630,70 @@ export default function Caja() {
     );
   }
 
+  // Liberar mesa sin procesar pago
+  const liberarMesa = async () => {
+    if (!mesaSeleccionadaLocal || !pedidoMesa) {
+      return;
+    }
+
+    const result = await Swal.fire({
+      icon: 'warning',
+      title: '¿Liberar mesa?',
+      html: `
+        <p>¿Deseas liberar la <strong>Mesa ${mesaSeleccionadaLocal.numero}</strong>?</p>
+        <p class="text-sm text-gray-600 mt-2">El pedido será cancelado y la mesa quedará disponible.</p>
+      `,
+      showCancelButton: true,
+      confirmButtonColor: '#f97316',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Sí, liberar',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        // Cerrar el pedido cambiando su estado a 'cerrado'
+        await api.patch(`/pedidos/${pedidoMesa.id}/`, {
+          estado: 'cerrado'
+        });
+
+        // Liberar la mesa cambiando su estado a 'disponible'
+        await api.patch(`/mesas/${mesaSeleccionadaLocal.id}/`, {
+          estado: 'disponible'
+        });
+
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: `Mesa ${mesaSeleccionadaLocal.numero} liberada`,
+          showConfirmButton: false,
+          timer: 2000,
+          timerProgressBar: true,
+          background: '#d1fae5',
+          iconColor: '#10b981',
+          customClass: {
+            title: 'text-green-800'
+          }
+        });
+
+        // Limpiar selección y recargar mesas
+        setMesaSeleccionadaLocal(null);
+        setPedidoMesa(null);
+        cargarMesasConCuentas();
+
+      } catch (error) {
+        console.error('Error liberando mesa:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: error.response?.data?.error || 'No se pudo liberar la mesa',
+          confirmButtonColor: '#f97316'
+        });
+      }
+    }
+  };
+    
   // Si la caja está abierta, mostrar el POS normal o cuenta rápida
   if (modoCuentaRapida) {
     return (
@@ -817,7 +897,29 @@ export default function Caja() {
                 <ShoppingCart className="w-5 h-5" />
                 {modoCuentaRapida ? 'Cuenta Rápida' : 'Detalle de Cuenta'}
                 {mesaSeleccionadaLocal && !modoCuentaRapida && (
-                  <span className="ml-auto text-sm font-normal bg-orange-100 text-orange-700 px-3 py-1 rounded">
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={abrirPedidoConMesa}
+                      className="ml-auto bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Agregar Productos
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={liberarMesa}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Liberar Mesa
+                    </Button>
+                  </>
+                )}
+                {mesaSeleccionadaLocal && !modoCuentaRapida && (
+                  <span className="text-sm font-normal bg-orange-100 text-orange-700 px-3 py-1 rounded">
                     Mesa {mesaSeleccionadaLocal.numero}
                   </span>
                 )}
@@ -900,30 +1002,47 @@ export default function Caja() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {pedidoMesa.detalles && pedidoMesa.detalles.map((item, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200"
-                      >
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-800">{item.producto.nombre}</h4>
-                          <p className="text-sm text-gray-600">
-                            ${item.producto.precio.toFixed(2)} c/u
-                          </p>
-                        </div>
+                    {pedidoMesa.detalles && (() => {
+                      // Agrupar productos por ID
+                      const productosAgrupados = pedidoMesa.detalles.reduce((acc, item) => {
+                        const productoId = item.producto.id;
+                        if (!acc[productoId]) {
+                          acc[productoId] = {
+                            producto: item.producto,
+                            cantidadTotal: 0,
+                            subtotal: 0
+                          };
+                        }
+                        acc[productoId].cantidadTotal += parseFloat(item.cantidad);
+                        acc[productoId].subtotal += item.producto.precio * item.cantidad;
+                        return acc;
+                      }, {});
 
-                        <div className="text-center">
-                          <span className="text-sm text-gray-500">Cantidad</span>
-                          <p className="font-semibold text-lg">{item.cantidad}</p>
-                        </div>
+                      return Object.values(productosAgrupados).map((grupo, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200"
+                        >
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-800">{grupo.producto.nombre}</h4>
+                            <p className="text-sm text-gray-600">
+                              ${grupo.producto.precio.toFixed(2)} c/u
+                            </p>
+                          </div>
 
-                        <div className="text-right w-24">
-                          <p className="font-bold text-lg text-gray-800">
-                            ${(item.producto.precio * item.cantidad).toFixed(2)}
-                          </p>
+                          <div className="text-center">
+                            <span className="text-sm text-gray-500">Cantidad</span>
+                            <p className="font-semibold text-lg">{grupo.cantidadTotal.toFixed(3)}</p>
+                          </div>
+
+                          <div className="text-right w-24">
+                            <p className="font-bold text-lg text-gray-800">
+                              ${grupo.subtotal.toFixed(2)}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 )
               )}

@@ -20,16 +20,7 @@ export const POSProvider = ({ children }) => {
   const [comensalSeleccionado, setComensalSeleccionado] = useState(null);
   const [carrito, setCarrito] = useState([]);
 
-  // Cargar usuario y permisos al montar el componente
-  useEffect(() => {
-    // Solo cargar si hay token (sesión activa)
-    const token = localStorage.getItem('token');
-    if (token) {
-      cargarUsuarioYPermisos();
-    }
-  }, []);
 
-  // Cargar permisos del usuario autenticado desde localStorage
   const cargarUsuarioYPermisos = async () => {
     try {
       const userStr = localStorage.getItem('user');
@@ -55,6 +46,18 @@ export const POSProvider = ({ children }) => {
       setPermisos([]);
     }
   };
+
+  // Cargar usuario y permisos al montar el componente
+  useEffect(() => {
+    // Solo cargar si hay token (sesión activa)
+    const token = localStorage.getItem('token');
+    if (token) {
+      cargarUsuarioYPermisos();
+    }
+  }, []);
+
+  // Cargar permisos del usuario autenticado desde localStorage 
+  
 
   // Verificar si el usuario tiene un permiso específico
   const tienePermiso = useCallback((codigoPermiso) => {

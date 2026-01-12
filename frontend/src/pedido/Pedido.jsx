@@ -13,7 +13,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ChevronRight, ChevronDown, Plus, Search, Users, Send, X, ArrowLeft, Receipt, Folder, List } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Search, Users, Send, ArrowLeft, Receipt, Folder, List, Trash2 } from "lucide-react";
+import ProductoCard from '../productos/producto';
 
 export default function Pedido() {
   const navigate = useNavigate();
@@ -22,8 +23,8 @@ export default function Pedido() {
     pedidoActivo, 
     comensalSeleccionado, 
     seleccionarComensal,
-    limpiarComensal,
-    resetearPOS 
+    resetearPOS,
+    userRol
   } = usePOS();
 
   const [comensales, setComensales] = useState([]);
@@ -41,20 +42,6 @@ export default function Pedido() {
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidadProducto, setCantidadProducto] = useState(1);
   const [observacionesProducto, setObservacionesProducto] = useState('');
-
-  useEffect(() => {
-    if (!mesaSeleccionada || !pedidoActivo) {
-      navigate('/mesas');
-      return;
-    }
-    cargarCategorias();
-    cargarProductos();
-    cargarComensales();
-    // Solo cargar detalles si pedidoActivo tiene ID
-    if (pedidoActivo?.id) {
-      cargarDetallesPedido();
-    }
-  }, [mesaSeleccionada, pedidoActivo, navigate]);
 
   const cargarComensales = async () => {
     if (!mesaSeleccionada) return;
@@ -87,6 +74,8 @@ export default function Pedido() {
     }
   };
 
+  
+
   const cargarDetallesPedido = async () => {
     if (!pedidoActivo?.id) {
       console.log('No hay pedido activo para cargar detalles');
@@ -118,37 +107,47 @@ export default function Pedido() {
       setDialogComensal(false);
     } catch (error) {
       console.error('Error agregando comensales:', error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Error al agregar comensales',
-        confirmButtonColor: '#f97316'
-      });
+      alert('Error al agregar comensales');
     }
   };
 
-  const agregarProductoAlPedido = (producto) => {
+  const agregarProductoAlPedido = (producto, cantidad = 1) => {
     if (!comensalSeleccionado) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Atención',
-        text: 'Por favor selecciona un comensal primero',
-        confirmButtonColor: '#f97316'
-      });
+      alert('Por favor selecciona un comensal primero');
       return;
     }
     
-    // Solo pedir cantidad si es unidad de peso
-    const esUnidadPeso = ['kilogramo', 'gramo'].includes(producto.precio_por_unidad);
-    
-    if (esUnidadPeso) {
-      setProductoSeleccionado(producto);
-      setCantidadProducto(0.1); // Valor inicial más apropiado para peso
-      setObservacionesProducto('');
-      setDialogProducto(true);
-    } else {
-      // Agregar directamente con cantidad 1
-      agregarDirectamente(producto, 1);
+    // Agregar directamente con la cantidad seleccionada
+    agregarDirectamente(producto, cantidad);
+  };
+
+  // Eliminar Producto del Pedido
+  const removeProductoDelPedido = async (detalle) => {
+
+    // No permitir eliminar si ya fue enviado a cocina
+    if (detalle.enviado_cocina) {
+      alert('No se puede eliminar un producto que ya fue enviado a cocina');
+      return;
+    }
+
+    try {
+      const res = await api.delete(`/pedidos/detalle/${detalle.id}/`);
+      if (res.status === 204) {
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Producto eliminado del pedido',
+          showConfirmButton: false,
+          timer: 2000,
+          timerProgressBar: true
+        });
+        cargarDetallesPedido();
+      }
+    } catch (error) {
+      console.error('Error eliminando producto del pedido:', error);
+      const errorMsg = error.response?.data?.error || 'Error al eliminar producto del pedido';
+      alert(errorMsg);
     }
   };
 
@@ -164,12 +163,7 @@ export default function Pedido() {
       cargarDetallesPedido();
     } catch (error) {
       console.error('Error agregando producto:', error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Error al agregar producto al pedido',
-        confirmButtonColor: '#f97316'
-      });
+      alert('Error al agregar producto al pedido');
     }
   };
 
@@ -189,12 +183,7 @@ export default function Pedido() {
       setObservacionesProducto('');
     } catch (error) {
       console.error('Error agregando producto:', error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Error al agregar producto al pedido',
-        confirmButtonColor: '#f97316'
-      });
+      alert('Error al agregar producto al pedido');
     }
   };
 
@@ -202,12 +191,7 @@ export default function Pedido() {
     try {
       const pendientes = detallesPedido.filter(d => d.enviado_cocina !== true);
       if (pendientes.length === 0) {
-        Swal.fire({
-          icon: 'info',
-          title: 'Información',
-          text: 'No hay productos pendientes para enviar a cocina',
-          confirmButtonColor: '#f97316'
-        });
+        alert('No hay productos pendientes para enviar a cocina');
         return;
       }
 
@@ -216,21 +200,18 @@ export default function Pedido() {
       });
       
       Swal.fire({
+        toast: true,
+        position: 'top-end',
         icon: 'success',
-        title: '¡Enviado!',
-        text: 'Productos enviados a cocina exitosamente',
-        confirmButtonColor: '#f97316',
-        timer: 2000
+        title: 'Productos enviados a cocina',
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true
       });
       cargarDetallesPedido();
     } catch (error) {
       console.error('Error enviando a cocina:', error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Error al enviar productos a cocina',
-        confirmButtonColor: '#f97316'
-      });
+      alert('Error al enviar productos a cocina');
     }
   };
 
@@ -280,7 +261,7 @@ export default function Pedido() {
     return matchBusqueda && matchCategoria && p.activo;
   });
 
-  // Agrupar detalles por comensal
+  // Agrupar detalles por comensal y luego por producto
   const detallesPorComensal = detallesPedido.reduce((acc, detalle) => {
     const comensalId = detalle.comensal?.id || 'sin-asignar';
     if (!acc[comensalId]) {
@@ -293,30 +274,57 @@ export default function Pedido() {
     return acc;
   }, {});
 
+  // Función para obtener color de fondo para productos duplicados
+  const obtenerColorProducto = (items, detalleId, productoId) => {
+    // Encontrar todos los detalles del mismo producto
+    const mismoProducto = items.filter(d => d.producto.id === productoId);
+    if (mismoProducto.length <= 1) return ''; // No hay duplicados
+    
+    // Asignar colores diferentes para cada grupo de productos
+    const colores = [
+      'bg-blue-50',
+      'bg-green-50', 
+      'bg-yellow-50',
+      'bg-purple-50',
+      'bg-pink-50',
+      'bg-indigo-50'
+    ];
+    
+    // Usar el producto ID como índice para el color
+    const colorIndex = productoId % colores.length;
+    return colores[colorIndex];
+  };
+
   const calcularTotalPedido = () => {
     return detallesPedido.reduce((sum, detalle) => sum + parseFloat(detalle.subtotal || 0), 0);
   };
 
-  const volverAMesas = async () => {
-    const result = await Swal.fire({
-      icon: 'question',
-      title: '¿Volver a mesas?',
-      text: 'Los cambios no enviados a cocina se perderán',
-      showCancelButton: true,
-      confirmButtonText: 'Sí, volver',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#f97316',
-      cancelButtonColor: '#6b7280'
-    });
+  const volverAMesas = () => {
+    const confirmar = window.confirm('¿Volver a mesas? Los cambios no enviados a cocina se perderán');
     
-    if (result.isConfirmed) {
+    if (confirmar) {
       resetearPOS();
       navigate('/mesas');
     }
   };
 
+  useEffect(() => {
+    if (!mesaSeleccionada || !pedidoActivo) {
+      navigate('/mesas');
+      return;
+    }
+    cargarCategorias();
+    cargarProductos();
+    cargarComensales();
+    // Solo cargar detalles si pedidoActivo tiene ID
+    if (pedidoActivo?.id) {
+      cargarDetallesPedido();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesaSeleccionada, pedidoActivo, navigate]);
+
   return (
-    <div className="h-[calc(100vh-80px)] flex flex-col p-6">
+    <div className="h-[calc(100vh-80px)] flex flex-col">
       {/* Header */}
       <div className="mb-4">
         <div className="flex justify-between items-center">
@@ -333,10 +341,22 @@ export default function Pedido() {
               <p className="text-gray-600 mt-1">Pedido #{pedidoActivo?.id}</p>
             </div>
           </div>
-          <Button onClick={enviarACocina} className="bg-green-600 hover:bg-green-700">
-            <Send className="w-4 h-4 mr-2" />
-            Enviar a Cocina
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Regresar a caja con mesa seleccionada solo se muestra a cajeros y administradores */}
+            {(userRol === 'cajero' || userRol === 'admin') && (
+              <Button
+                onClick={() => navigate('/caja')}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Regresar a Caja
+              </Button>
+            )}
+            <Button onClick={enviarACocina} className="bg-green-600 hover:bg-green-700">
+              <Send className="w-4 h-4 mr-2" />
+              Enviar a Cocina
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -418,47 +438,14 @@ export default function Pedido() {
 
             <div className="flex-1 overflow-auto">
               <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {productosFiltrados.map(producto => {
-                  // Convertir stock a número y manejar diferentes formatos
-                  const stockRaw = producto.stock;
-                  const stockNumerico = stockRaw !== null && stockRaw !== undefined && stockRaw !== '' 
-                    ? Number(stockRaw) 
-                    : 0;
-                  
-                  // Stock ilimitado puede ser -1 o valores muy grandes
-                  const esStockIlimitado = stockNumerico === -1 || stockNumerico < -0.5;
-                  const tieneStock = esStockIlimitado || stockNumerico > 0;
-                  const sinStock = !tieneStock;
-                  
-                  return (
-                    <button
-                      key={producto.id}
-                      onClick={() => agregarProductoAlPedido(producto)}
-                      disabled={!comensalSeleccionado || sinStock}
-                      className={`p-4 rounded-lg border-2 text-left transition-all ${
-                        comensalSeleccionado && tieneStock
-                          ? 'border-gray-200 hover:border-orange-500 hover:shadow-md cursor-pointer'
-                          : 'border-gray-100 bg-gray-50 cursor-not-allowed opacity-50'
-                      }`}
-                    >
-                      <h4 className="font-semibold text-sm mb-1">{producto.nombre}</h4>
-                      {producto.descripcion && (
-                        <p className="text-xs text-gray-600 mb-2 line-clamp-2">{producto.descripcion}</p>
-                      )}
-                      <div className="flex justify-between items-center">
-                        <span className="text-lg font-bold text-orange-600">
-                          ${parseFloat(producto.precio).toFixed(2)}
-                        </span>
-                        {sinStock && (
-                          <span className="text-xs text-red-600 font-medium">Sin stock</span>
-                        )}
-                        {esStockIlimitado && (
-                          <span className="text-xs text-green-600 font-medium">∞</span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                {productosFiltrados.map(producto => (
+                  <ProductoCard
+                    key={producto.id}
+                    producto={producto}
+                    onAgregar={agregarProductoAlPedido}
+                    disabled={!comensalSeleccionado}
+                  />
+                ))}
               </div>
             </div>
           </CardContent>
@@ -484,28 +471,47 @@ export default function Pedido() {
                         {grupo.comensal?.nombre || 'Sin asignar'}
                       </span>
                     </div>
-                    <div className="space-y-2">
-                      {grupo.items.map(detalle => (
-                        <div key={detalle.id} className="flex justify-between items-start text-xs">
-                          <div className="flex-1">
-                            <p className="font-medium">{detalle.producto.nombre}</p>
-                            <p className="text-gray-600">
-                              {detalle.cantidad}x ${parseFloat(detalle.precio_unitario).toFixed(2)}
-                            </p>
-                            {detalle.observaciones && (
-                              <p className="text-orange-600 text-xs italic mt-1">
-                                📝 {detalle.observaciones}
+                    <div className="space-y-1">
+                      {grupo.items.map(detalle => {
+                        const colorFondo = obtenerColorProducto(grupo.items, detalle.id, detalle.producto.id);
+                        return (
+                          <div 
+                            key={detalle.id} 
+                            className={`flex justify-between items-start text-xs p-2 rounded ${colorFondo}`}
+                          >
+                            <div className="flex-1">
+                              <p className="font-medium">{detalle.producto.nombre}</p>
+                              <p className="text-gray-600">
+                                {detalle.cantidad}x ${parseFloat(detalle.precio_unitario).toFixed(2)}
                               </p>
-                            )}
-                            {detalle.enviado_cocina === true && (
-                              <span className="text-green-600 text-xs">✓ En cocina</span>
-                            )}
+                             
+                              {detalle.observaciones && (
+                                <p className="text-orange-600 text-xs italic mt-1">
+                                  📝 {detalle.observaciones}
+                                </p>
+                              )}
+                              {detalle.enviado_cocina === true && (
+                                <span className="text-green-600 text-xs">✓ En cocina</span>
+                              )}
+                            </div>
+                            <span className="font-semibold">
+                              ${parseFloat(detalle.subtotal).toFixed(2)}
+                            </span>
+                            <button
+                              onClick={() => removeProductoDelPedido(detalle)}
+                              disabled={detalle.enviado_cocina}
+                              className={`ml-2 ${
+                                detalle.enviado_cocina 
+                                  ? 'text-gray-400 cursor-not-allowed' 
+                                  : 'text-red-600 hover:text-red-800'
+                              }`}
+                              title={detalle.enviado_cocina ? 'No se puede eliminar (ya en cocina)' : 'Eliminar producto del pedido'}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
-                          <span className="font-semibold">
-                            ${parseFloat(detalle.subtotal).toFixed(2)}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div className="mt-2 pt-2 border-t flex justify-between text-sm font-semibold">
                       <span>Subtotal:</span>
@@ -563,7 +569,7 @@ export default function Pedido() {
                     step={['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) ? "0.001" : "1"}
                     min={['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) ? "0.001" : "1"}
                     max={
-                        productoSeleccionado?.stock && Number(productoSeleccionado.stock) < -0.5
+                        productoSeleccionado?.stock && Number(productoSeleccionado.stock) === -1
                         ? undefined
                         : (productoSeleccionado?.stock ? Number(productoSeleccionado.stock) : 1)
                     }
@@ -587,7 +593,7 @@ export default function Pedido() {
                     onFocus={(e) => e.target.select()}
                     autoFocus
 />
-              {productoSeleccionado?.stock && Number(productoSeleccionado.stock) < -0.5 && (
+              {productoSeleccionado?.stock && Number(productoSeleccionado.stock) === -1 && (
                 <p className="text-xs text-green-600 mt-1">∞ Stock ilimitado</p>
               )}
               {['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) && (

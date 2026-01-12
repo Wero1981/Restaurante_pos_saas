@@ -4,7 +4,8 @@ from .views import (
     PedidoViewSet,
     AbrirPedidoView, 
     AgregarProductoView, 
-    EnviarCocinaView
+    EnviarCocinaView,
+    EliminarDetalleView
 )
 
 router = DefaultRouter()
@@ -14,5 +15,6 @@ urlpatterns = [
     path('abrir/', AbrirPedidoView.as_view(), name='abrir-pedido'),
     path('agregar-producto/', AgregarProductoView.as_view(), name='agregar-producto'),
     path('enviar-cocina/', EnviarCocinaView.as_view(), name='enviar-cocina'),
+    path('detalle/<int:detalle_id>/', EliminarDetalleView.as_view(), name='eliminar-detalle'),
     path('', include(router.urls)),
 ]

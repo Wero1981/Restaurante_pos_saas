@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 from restaurantes.models import Restaurante
 from usuarios.models import Usuario
 
@@ -31,4 +32,19 @@ class Producto(models.Model):
 
     def __str__(self):
         return f"{self.nombre} - ${self.precio}/{self.get_precio_por_unidad_display()}"
+    
+    def clean(self):
+        """Validar que el stock no sea negativo (excepto -1 que significa ilimitado)"""
+        if self.stock is not None and self.stock < -1:
+            raise ValidationError({
+                'stock': 'El stock no puede ser menor a -1. Use -1 para stock ilimitado o valores >= 0.'
+            })
+    
+    def save(self, *args, **kwargs):
+        """Override save para ejecutar validaciones solo si no se especifica lo contrario"""
+        # Permitir skip_validation=True para operaciones bulk o correcciones
+        skip_validation = kwargs.pop('skip_validation', False)
+        if not skip_validation:
+            self.full_clean()
+        super().save(*args, **kwargs)
 
