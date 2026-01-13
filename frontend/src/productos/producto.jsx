@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 export default function ProductoCard({ 
   producto, 
   onAgregar, 
-  disabled = false
+  disabled = false,
+  modoRapido = false
 }) {
   const [cantidad, setCantidad] = useState(1);
   const [modoManual, setModoManual] = useState(false);
@@ -46,16 +47,24 @@ export default function ProductoCard({
     }
   };
 
+  const handleClickCard = () => {
+    if (modoRapido) {
+      onAgregar(producto, 1);
+    }
+  };
+
   return (
-    <div 
-      className={`w-[200px] h-[320px] flex flex-col relative rounded-lg border-2 overflow-hidden transition-all ${
+  
+     <div className={`w-full h-[260px] flex flex-col relative rounded-lg border-2 overflow-hidden transition-all min-w-0 ${
+
         disabled || sinStock
           ? 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
           : 'border-gray-200 hover:border-orange-500 hover:shadow-lg'
       }`}
+      onClick={handleClickCard} 
     >
       {/* Imagen o Placeholder */}
-      <div className="relative h-40 flex-shrink-0 bg-gradient-to-br from-orange-100 to-orange-50">
+      <div className="relative h-28 flex-shrink-0 bg-gradient-to-br from-orange-100 to-orange-50">
         {producto.url_imagen ? (
           <img 
             src={producto.url_imagen} 
@@ -94,7 +103,7 @@ export default function ProductoCard({
       <div className="flex-1 flex flex-col p-3 space-y-2">
         {/* Nombre (si hay imagen) */}
         {producto.url_imagen && (
-          <h4 className="font-semibold text-sm line-clamp-2">
+          <h4 className="font-semibold text-xs line-clamp-2">
             {producto.nombre}
           </h4>
         )}
@@ -122,6 +131,7 @@ export default function ProductoCard({
         </div>
 
         {/* Selector de cantidad y botón agregar */}
+        {!modoRapido && (
         <div className="flex gap-2">
           {modoManual ? (
             <div className="flex-1 relative">
@@ -140,7 +150,8 @@ export default function ProductoCard({
                 disabled={disabled || sinStock}
                 step="0.01"
                 min="0.01"
-                className="w-full border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full min-w-0 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+
                 placeholder={`Cantidad en ${unidadMedida}`}
               />
               <button
@@ -188,6 +199,7 @@ export default function ProductoCard({
             <Plus className="w-4 h-4" />
           </Button>
         </div>
+        )}
       </div>
     </div>
   );

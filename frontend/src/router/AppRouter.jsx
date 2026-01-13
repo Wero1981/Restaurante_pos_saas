@@ -29,7 +29,6 @@ export default function AppRouter() {
             <Layout />
           </ProtectedRoute>
         }>
-        }>
           {/* Lista de restaurantes - solo admin */}
           <Route path="/restaurantes" element={
             <RutaProtegida permiso="administrar_usuarios">

@@ -57,7 +57,7 @@ export default function Topbar() {
                     <Wallet className="inline-block w-4 h-4 text-green-500 mr-1" />
                   )}
                   
-                  {user.nombre}
+                  {user?.nombre || 'Usuario'}
 
                 </div>
               </div>

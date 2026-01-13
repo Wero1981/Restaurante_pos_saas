@@ -1,30 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Swal from 'sweetalert2';
 import api from '../services/api';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import PanelVentas from '../components/PanelVentas';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  ChevronRight,
-  ChevronDown,
-  Plus,
-  Search,
   X,
-  DollarSign,
-  Minus,
-  Trash2,
-  ShoppingCart,
   CheckCircle
 } from "lucide-react";
+
 
 export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
   const [categorias, setCategorias] = useState([]);
   const [productos, setProductos] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null);
   const [busqueda, setBusqueda] = useState('');
-  const [expandidos, setExpandidos] = useState({});
   const [carrito, setCarrito] = useState([]);
+  const [barcode, setBarcode] = useState('');
+  const [modoRapido, setModoRapido] = useState(true);
 
   // Estados para pago
   const [dialogPago, setDialogPago] = useState(false);
@@ -37,6 +31,8 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
     cargarCategorias();
     cargarProductos();
   }, []);
+    
+    
 
   const cargarCategorias = async () => {
     try {
@@ -58,24 +54,18 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
     }
   };
 
-  const toggleCategoria = (categoriaId) => {
-    setExpandidos(prev => ({
-      ...prev,
-      [categoriaId]: !prev[categoriaId]
-    }));
-  };
 
-  const agregarAlCarrito = (producto) => {
+  const agregarAlCarrito = useCallback((producto, cantidad = 1) => {
     const itemExistente = carrito.find(item => item.id === producto.id);
     
     if (itemExistente) {
       setCarrito(carrito.map(item =>
         item.id === producto.id
-          ? { ...item, cantidad: item.cantidad + 1 }
+          ? { ...item, cantidad: item.cantidad + cantidad }
           : item
       ));
     } else {
-      setCarrito([...carrito, { ...producto, cantidad: 1 }]);
+      setCarrito([...carrito, { ...producto, cantidad: cantidad }]);
     }
 
     Swal.fire({
@@ -87,7 +77,43 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
       toast: true,
       position: 'top-end'
     });
-  };
+
+  }, [carrito]);
+
+  useEffect(() => {
+    let timeout;
+
+    const handleKeyDown = (e) => {
+      if (timeout) clearTimeout(timeout);
+
+      if (e.key === 'Enter') {
+        if (barcode.length > 3) {
+          const producto = productos.find(
+            p => p.codigo_barras === barcode
+          );
+
+          if (producto) {
+            agregarAlCarrito(producto, 1);
+          } else {
+            Swal.fire({
+              icon: 'warning',
+              title: 'No encontrado',
+              text: 'Producto no registrado'
+            });
+          }
+        }
+        setBarcode('');
+        return;
+      }
+
+      if (/^[0-9]$/.test(e.key)) {
+        setBarcode(prev => prev + e.key);
+        timeout = setTimeout(() => setBarcode(''), 100);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [barcode, productos, agregarAlCarrito]);
 
   const incrementarCantidad = (productoId) => {
     setCarrito(carrito.map(item =>
@@ -128,6 +154,10 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
     
     return coincideBusqueda && coincideCategoria;
   });
+
+  const agregarProductoAlPedido = (producto, cantidad = 1) => {
+    agregarAlCarrito(producto , cantidad);
+  };
 
   const abrirDialogPago = () => {
     if (carrito.length === 0) {
@@ -218,225 +248,25 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
         </Button>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Panel de productos */}
-        <div className="flex-1 flex flex-col bg-gray-50 overflow-hidden">
-          {/* Búsqueda y filtros */}
-          <div className="p-4 bg-white border-b">
-            <div className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Buscar productos..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-
-            {/* Filtro por categoría */}
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-              <Button
-                size="sm"
-                variant={categoriaSeleccionada === null ? 'default' : 'outline'}
-                onClick={() => setCategoriaSeleccionada(null)}
-                className={`${categoriaSeleccionada === null ? 'bg-orange-500' : ''} flex-shrink-0`}
-              >
-                Todos
-              </Button>
-              {categorias
-                .filter(cat => productos.some(p => p.categoria === cat.id && p.activo))
-                .map(cat => (
-                  <Button
-                    key={cat.id}
-                    size="sm"
-                    variant={categoriaSeleccionada === cat.id ? 'default' : 'outline'}
-                    onClick={() => setCategoriaSeleccionada(cat.id)}
-                    className={`${categoriaSeleccionada === cat.id ? 'bg-orange-500' : ''} flex-shrink-0 whitespace-nowrap`}
-                  >
-                    {cat.nombre}
-                  </Button>
-                ))}
-            </div>
-          </div>
-
-          {/* Lista de productos agrupados por categoría */}
-          <div className="flex-1 overflow-auto p-4">
-            {categorias.map(categoria => {
-              const productosCategoria = productosFiltrados.filter(p => p.categoria === categoria.id);
-              if (productosCategoria.length === 0) return null;
-
-              return (
-                <Card key={categoria.id} className="mb-4">
-                  <CardHeader
-                    className="cursor-pointer hover:bg-gray-50 transition-colors p-3"
-                    onClick={() => toggleCategoria(categoria.id)}
-                  >
-                    <CardTitle className="flex items-center justify-between text-base">
-                      <span>{categoria.nombre}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-500">({productosCategoria.length})</span>
-                        {expandidos[categoria.id] ? (
-                          <ChevronDown className="w-4 h-4" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4" />
-                        )}
-                      </div>
-                    </CardTitle>
-                  </CardHeader>
-
-                  {expandidos[categoria.id] && (
-                    <CardContent className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {productosCategoria.map(producto => (
-                        <div
-                          key={producto.id}
-                          onClick={() => agregarAlCarrito(producto)}
-                          className="p-3 bg-white border rounded-lg hover:border-orange-500 hover:shadow-md cursor-pointer transition-all"
-                        >
-                          <h4 className="font-semibold text-gray-800 mb-1">{producto.nombre}</h4>
-                          {producto.descripcion && (
-                            <p className="text-xs text-gray-500 mb-2 line-clamp-2">
-                              {producto.descripcion}
-                            </p>
-                          )}
-                          <div className="flex justify-between items-center">
-                            <span className="text-lg font-bold text-orange-600">
-                              ${producto.precio}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              Stock: {producto.stock}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </CardContent>
-                  )}
-                </Card>
-              );
-            })}
-
-            {/* Productos sin categoría o cuando hay búsqueda */}
-            {(busqueda || categoriaSeleccionada !== null) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {productosFiltrados.map(producto => (
-                  <div
-                    key={producto.id}
-                    onClick={() => agregarAlCarrito(producto)}
-                    className="p-3 bg-white border rounded-lg hover:border-orange-500 hover:shadow-md cursor-pointer transition-all"
-                  >
-                    <h4 className="font-semibold text-gray-800 mb-1">{producto.nombre}</h4>
-                    {producto.descripcion && (
-                      <p className="text-xs text-gray-500 mb-2 line-clamp-2">
-                        {producto.descripcion}
-                      </p>
-                    )}
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-bold text-orange-600">
-                        ${producto.precio}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        Stock: {producto.stock}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Panel de carrito */}
-        <div className="w-96 bg-white border-l flex flex-col">
-          <div className="p-4 border-b">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-orange-500" />
-              Carrito ({carrito.reduce((sum, item) => sum + item.cantidad, 0)} items)
-            </h3>
-          </div>
-
-          <div className="flex-1 overflow-auto p-4">
-            {carrito.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                <ShoppingCart className="w-16 h-16 mb-3" />
-                <p className="text-center">Carrito vacío<br />Agrega productos</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {carrito.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 bg-gray-50 rounded-lg border"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-semibold text-sm text-gray-800 flex-1">
-                        {item.nombre}
-                      </h4>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removerDelCarrito(item.id)}
-                        className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => decrementarCantidad(item.id)}
-                          className="h-7 w-7 p-0"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </Button>
-                        <span className="w-8 text-center font-semibold">
-                          {item.cantidad}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => incrementarCantidad(item.id)}
-                          className="h-7 w-7 p-0"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </Button>
-                      </div>
-
-                      <span className="font-bold text-orange-600">
-                        ${(item.precio * item.cantidad).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Total y botón de pago */}
-          <div className="p-4 border-t bg-gray-50">
-            <div className="mb-4">
-              <div className="flex justify-between text-sm text-gray-600 mb-1">
-                <span>Subtotal:</span>
-                <span>${calcularTotal().toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-lg text-gray-800">
-                <span>Total:</span>
-                <span className="text-orange-600">${calcularTotal().toFixed(2)}</span>
-              </div>
-            </div>
-
-            <Button
-              onClick={abrirDialogPago}
-              disabled={carrito.length === 0}
-              className="w-full bg-orange-500 hover:bg-orange-600 h-12 text-lg"
-            >
-              <DollarSign className="w-5 h-5 mr-2" />
-              Procesar Pago
-            </Button>
-          </div>
-        </div>
-      </div>
+      <PanelVentas
+        categorias={categorias}
+        productos={productos}
+        categoriaSeleccionada={categoriaSeleccionada}
+        setCategoriaSeleccionada={setCategoriaSeleccionada}
+        busqueda={busqueda}
+        setBusqueda={setBusqueda}
+        carrito={carrito}
+        incrementarCantidad={incrementarCantidad}
+        decrementarCantidad={decrementarCantidad}
+        removerDelCarrito={removerDelCarrito}
+        calcularTotal={calcularTotal}
+        onProcesarPago={abrirDialogPago}
+        modoRapido={modoRapido}
+        setModoRapido={setModoRapido}
+        agregarProductoAlPedido={agregarProductoAlPedido}
+        productosFiltrados={productosFiltrados}
+        botonPagoTexto="Procesar Pago"
+      />
 
       {/* Dialog de Pago */}
       <Dialog open={dialogPago} onOpenChange={setDialogPago}>
