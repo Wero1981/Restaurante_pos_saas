@@ -6,8 +6,9 @@ import { usePOS } from '../context/POSContext';
 
 export default function Topbar() {
   const navigate = useNavigate();
-  const { user, userRol } = usePOS();
+  const { user, userRol, setShowSidebar } = usePOS();
   const [fullScreen, setFullScreen] = useState(false);
+
   
   const currentDate = new Date().toLocaleDateString('es-ES', {
     weekday: 'long',
@@ -25,10 +26,12 @@ export default function Topbar() {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
       setFullScreen(true);
+      setShowSidebar(false);
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen();
         setFullScreen(false);
+        setShowSidebar(true);
       }
     }
   }

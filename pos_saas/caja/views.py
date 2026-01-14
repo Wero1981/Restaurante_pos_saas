@@ -1,8 +1,12 @@
+from rest_framework import status
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
-from django.utils.timezone import now
-from .serializers import CajaSerializer
-from .models import Caja
+from .serializers import CajaSerializer, MovimientoCajaSerializer
+from .models import Caja, MovimientoCaja
+from .services import obtener_resumen_caja
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 @extend_schema_view(
     list=extend_schema(
@@ -61,7 +65,41 @@ class CajaViewSet(ModelViewSet):
 
     def get_queryset(self):
         restaurante_id = self.request.query_params.get('restaurante')
-        return Caja.objects.filter(
-            restaurante_id=restaurante_id,
-            abierta=True
-        )
+        queryset = Caja.objects.all()
+        if restaurante_id:
+            queryset = queryset.filter(restaurante_id=restaurante_id)
+
+        if getattr(self, 'action', None) == 'list':
+            return queryset.filter(abierta=True).order_by('-fecha_apertura')
+        return queryset.order_by('-fecha_apertura')
+
+    @action(detail=True, methods=['get'], url_path='resumen')
+    def resumen(self, request, pk=None):
+        caja = self.get_object()
+        resumen = obtener_resumen_caja(caja)
+        return Response(resumen)
+
+    @action(detail=True, methods=['post'], url_path='cerrar')
+    def cerrar(self, request, pk=None):
+        caja = self.get_object()
+        if not caja.abierta:
+            return Response({'detail': 'La caja ya se encuentra cerrada.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        resumen = obtener_resumen_caja(caja)
+        caja.registrar_cierre(resumen, cierre_automatico=request.data.get('automatico', False))
+        return Response(resumen, status=status.HTTP_200_OK)
+
+
+class MovimientoCajaViewSet(ModelViewSet):
+    serializer_class = MovimientoCajaSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        caja_id = self.request.query_params.get('caja')
+        return MovimientoCaja.objects.filter(caja_id=caja_id).order_by('-fecha')
+
+    def perform_create(self, serializer):
+        caja = serializer.validated_data['caja']
+        if not caja.abierta:
+            raise ValidationError('No se pueden registrar movimientos en una caja cerrada.')
+        serializer.save()

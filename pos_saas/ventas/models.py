@@ -58,6 +58,7 @@ class PedidoDetalle(models.Model):
 class Venta(models.Model):
     restaurante = models.ForeignKey(Restaurante, on_delete=models.CASCADE)
     pedido = models.OneToOneField(Pedido, on_delete=models.CASCADE, null=True, blank=True)
+    caja = models.ForeignKey('caja.Caja', on_delete=models.SET_NULL, null=True, blank=True, related_name='ventas')
     usuario = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True)
     total = models.DecimalField(max_digits=10, decimal_places=2)
     estado = models.CharField(

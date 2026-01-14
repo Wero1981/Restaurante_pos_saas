@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../services/api';
@@ -6,6 +6,7 @@ import { usePOS } from '../context/POSContext';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import CategoriaCard from '../productos/CategoriaCard';
 import {
   Dialog,
   DialogContent,
@@ -13,8 +14,17 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ChevronRight, ChevronDown, Plus, Search, Users, Send, ArrowLeft, Receipt, Folder, List, Trash2 } from "lucide-react";
+import { ChevronRight, 
+  Plus, 
+  Search, 
+  Users, 
+  Send, 
+  ArrowLeft, 
+  Receipt, 
+  Trash2
+     } from "lucide-react";
 import ProductoCard from '../productos/producto';
+
 
 export default function Pedido() {
   const navigate = useNavigate();
@@ -32,9 +42,122 @@ export default function Pedido() {
   const [productos, setProductos] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null);
   const [busqueda, setBusqueda] = useState('');
-  const [expandidos, setExpandidos] = useState({});
   const [detallesPedido, setDetallesPedido] = useState([]);
   
+  const categoriasPrincipales = useMemo(() => {
+    const lista = Array.isArray(categorias) ? categorias : [];
+    const principales = lista.filter(cat => !cat.parent);
+    return principales.length ? principales : lista;
+  }, [categorias]);
+
+  const categoriasPorId = useMemo(() => {
+    const mapa = {};
+    const lista = Array.isArray(categorias) ? categorias : [];
+
+    lista.forEach(cat => {
+      if (cat?.id !== undefined) {
+        mapa[cat.id] = cat;
+      }
+    });
+
+    const agregarSubcategorias = (subcats) => {
+      if (!Array.isArray(subcats)) return;
+      subcats.forEach(subcat => {
+        if (subcat?.id !== undefined) {
+          mapa[subcat.id] = subcat;
+        }
+        if (subcat.subcategorias?.length) {
+          agregarSubcategorias(subcat.subcategorias);
+        }
+      });
+    };
+
+    const principales = lista.filter(cat => !cat.parent);
+    agregarSubcategorias(principales.length ? principales : lista);
+
+    return mapa;
+  }, [categorias]);
+
+  const breadcrumbs = useMemo(() => {
+    if (!categoriaSeleccionada) return [];
+
+    const ruta = [];
+    let actual = categoriasPorId[categoriaSeleccionada];
+    const visitados = new Set();
+
+    while (actual && !visitados.has(actual.id)) {
+      ruta.unshift(actual);
+      visitados.add(actual.id);
+      if (!actual.parent) {
+        break;
+      }
+      actual = categoriasPorId[actual.parent];
+    }
+
+    return ruta;
+  }, [categoriaSeleccionada, categoriasPorId]);
+
+  const categoriaActual = breadcrumbs.length
+    ? breadcrumbs[breadcrumbs.length - 1]
+    : categoriaSeleccionada
+      ? categoriasPorId[categoriaSeleccionada] ?? null
+      : null;
+
+  const categoriaPrincipalActivaId = breadcrumbs.length ? breadcrumbs[0].id : null;
+
+  const categoriaFiltroIds = useMemo(() => {
+    if (!categoriaSeleccionada) return null;
+
+    const ids = new Set();
+    const visitados = new Set();
+
+    const agregarDescendientes = (categoria) => {
+      if (!categoria || visitados.has(categoria.id)) return;
+      visitados.add(categoria.id);
+      ids.add(categoria.id);
+
+      if (Array.isArray(categoria.subcategorias)) {
+        categoria.subcategorias.forEach(subcat => agregarDescendientes(categoriasPorId[subcat.id] || subcat));
+      }
+    };
+
+    const seleccionada = categoriasPorId[categoriaSeleccionada];
+    agregarDescendientes(seleccionada);
+
+    return ids.size ? Array.from(ids) : null;
+  }, [categoriaSeleccionada, categoriasPorId]);
+
+  const tieneSubcategorias = Boolean(
+    categoriaActual &&
+    Array.isArray(categoriaActual.subcategorias) &&
+    categoriaActual.subcategorias.length > 0
+  );
+
+  const tieneProductos = Boolean(
+    categoriaActual &&
+    Array.isArray(productos) &&
+    productos.some(p => p.categoria === categoriaActual.id)
+  );
+
+  const handleResetCategorias = () => {
+    setCategoriaSeleccionada(null);
+    setBusqueda('');
+  };
+
+  const handleSeleccionCategoria = (categoriaId) => {
+    if (categoriaId === undefined || categoriaId === null) {
+      handleResetCategorias();
+      return;
+    }
+    setCategoriaSeleccionada(categoriaId);
+    setBusqueda('');
+  };
+
+  const handleIrACategoriaPadre = () => {
+    if (!categoriaActual) return;
+    handleSeleccionCategoria(categoriaActual.parent ?? null);
+  };
+
   // Dialogs
   const [dialogComensal, setDialogComensal] = useState(false);
   const [numeroComensales, setNumeroComensales] = useState(1);
@@ -215,49 +338,10 @@ export default function Pedido() {
     }
   };
 
-  const toggleExpanded = (id) => {
-    setExpandidos(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const renderArbolCategorias = (cats, level = 0) => {
-    return cats.map(cat => (
-      <div key={cat.id} style={{ marginLeft: `${level * 16}px` }}>
-        <div
-          onClick={() => setCategoriaSeleccionada(cat.id)}
-          className={`flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer ${
-            categoriaSeleccionada === cat.id ? 'bg-orange-50 border-l-4 border-orange-500' : ''
-          }`}
-        >
-          {cat.subcategorias && cat.subcategorias.length > 0 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleExpanded(cat.id);
-              }}
-              className="hover:bg-gray-200 rounded p-1"
-            >
-              {expandidos[cat.id] ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-            </button>
-          )}
-          {(!cat.subcategorias || cat.subcategorias.length === 0) && (
-            <span className="w-6"></span>
-          )}
-          <Folder className="w-4 h-4 text-orange-500" />
-          <span className="flex-1 font-medium text-sm">{cat.nombre}</span>
-        </div>
-        {expandidos[cat.id] && cat.subcategorias && renderArbolCategorias(cat.subcategorias, level + 1)}
-      </div>
-    ));
-  };
-
   const productosFiltrados = (Array.isArray(productos) ? productos : []).filter(p => {
     const matchBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
                           p.descripcion?.toLowerCase().includes(busqueda.toLowerCase());
-    const matchCategoria = !categoriaSeleccionada || p.categoria === categoriaSeleccionada;
+    const matchCategoria = !categoriaFiltroIds || categoriaFiltroIds.includes(p.categoria);
     return matchBusqueda && matchCategoria && p.activo;
   });
 
@@ -324,361 +408,447 @@ export default function Pedido() {
   }, [mesaSeleccionada, pedidoActivo, navigate]);
 
   return (
-    <div className="h-[calc(100vh-80px)] flex flex-col">
-      {/* Header */}
-      <div className="mb-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={volverAMesas}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Volver
-            </Button>
-            <div>
-              <h2 className="text-3xl font-bold text-gray-800">
-                <Receipt className="inline-block w-8 h-8 text-orange-500 mr-3" />
-                Mesa {mesaSeleccionada?.nombre || mesaSeleccionada?.numero}
-              </h2>
-              <p className="text-gray-600 mt-1">Pedido #{pedidoActivo?.id}</p>
+    <>
+      <div className="h-[calc(100vh-100px)] flex flex-col gap-4 bg-gray-100">
+        {/* Header */}
+        <div className="mb-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <Button variant="outline" onClick={volverAMesas}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Volver
+              </Button>
+              <div>
+                <h2 className="text-3xl font-bold text-gray-800">
+                  <Receipt className="inline-block w-8 h-8 text-orange-500 mr-3" />
+                  Mesa {mesaSeleccionada?.nombre || mesaSeleccionada?.numero}
+                </h2>
+                <p className="text-gray-600 mt-1">Pedido #{pedidoActivo?.id}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Regresar a caja con mesa seleccionada solo se muestra a cajeros y administradores */}
+              {(userRol === 'cajero' || userRol === 'admin') && (
+                <Button
+                  onClick={() => navigate('/caja')}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Regresar a Caja
+                </Button>
+              )}
+              <Button onClick={enviarACocina} className="bg-green-600 hover:bg-green-700">
+                <Send className="w-4 h-4 mr-2" />
+                Enviar a Cocina
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Regresar a caja con mesa seleccionada solo se muestra a cajeros y administradores */}
-            {(userRol === 'cajero' || userRol === 'admin') && (
-              <Button
-                onClick={() => navigate('/caja')}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Regresar a Caja
-              </Button>
-            )}
-            <Button onClick={enviarACocina} className="bg-green-600 hover:bg-green-700">
-              <Send className="w-4 h-4 mr-2" />
-              Enviar a Cocina
-            </Button>
-          </div>
         </div>
-      </div>
 
-      {/* Layout Principal */}
-      <div className="flex gap-4 flex-1 overflow-hidden">
-        {/* Panel Izquierdo - Comensales y Categorías */}
-        <div className="w-64 flex flex-col gap-4">
-          {/* Selector de Comensales */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-sm">Comensales</h3>
-                <Button
-                  size="sm"
-                  onClick={() => setDialogComensal(true)}
-                >
-                  <Plus className="w-3 h-3 mr-1" />
-                  Agregar
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {comensales.map(comensal => (
+        {/* Layout Principal */}
+        <div className="flex gap-4 flex-1 overflow-hidden">
+          {/* Panel Izquierdo - Categorías */}
+          <div className="w-64 flex flex-col overflow-y-auto">
+            <Card className="flex-1">
+              <CardContent className="p-4">
+                <h3 className="font-bold text-lg mb-3">Categorías</h3>
+                <div className="space-y-2">
                   <button
-                    key={comensal.id}
-                    onClick={() => seleccionarComensal(comensal)}
-                    className={`w-full p-2 rounded-lg text-left text-sm transition-colors ${
-                      comensalSeleccionado?.id === comensal.id
+                    onClick={handleResetCategorias}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                      categoriaSeleccionada === null
                         ? 'bg-orange-500 text-white'
                         : 'bg-gray-100 hover:bg-gray-200'
                     }`}
                   >
-                    <Users className="w-3 h-3 inline mr-2" />
-                    {comensal.nombre}
+                    Todas las categorías
                   </button>
-                ))}
-                {comensales.length === 0 && (
-                  <p className="text-xs text-gray-500 text-center py-2">
-                    No hay comensales
-                  </p>
-                )}
+                  {(categoriasPrincipales.length ? categoriasPrincipales : []).map(categoria => (
+                    <CategoriaCard
+                      key={categoria.id}
+                      categoria={categoria}
+                      activa={categoriaPrincipalActivaId === categoria.id}
+                      onClick={() => handleSeleccionCategoria(categoria.id)}
+                    />
+                  ))}
+                  {!categoriasPrincipales.length && (
+                    <p className="text-xs text-gray-500 text-center py-2">
+                      No hay categorías registradas
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Panel Central - Productos */}
+          <Card className="flex-1 flex flex-col">
+            <CardContent className="p-4 flex flex-col h-full">
+              {breadcrumbs.length > 0 && (
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleResetCategorias}
+                      className="text-orange-600 hover:text-orange-700 font-medium"
+                    >
+                      Todas
+                    </button>
+                    {breadcrumbs.map((categoria, index) => (
+                      <div key={categoria.id} className="flex items-center gap-2">
+                        <ChevronRight className="w-3 h-3 text-gray-400" />
+                        {index === breadcrumbs.length - 1 ? (
+                          <span className="font-semibold text-gray-800">{categoria.nombre}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSeleccionCategoria(categoria.id)}
+                            className="hover:text-orange-600"
+                          >
+                            {categoria.nombre}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {categoriaActual?.parent !== null && categoriaActual?.parent !== undefined && (
+                    <Button variant="outline" onClick={handleIrACategoriaPadre}>
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Atrás
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    placeholder="Buscar productos..."
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto">
+                <div className="space-y-4 pb-4">
+                  {tieneSubcategorias && (
+                    <div>
+                      <h4 className="font-semibold text-sm text-gray-700 mb-2">
+                        Subcategorías
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {categoriaActual?.subcategorias?.map(subcategoria => (
+                          <CategoriaCard
+                            key={subcategoria.id}
+                            categoria={subcategoria}
+                            activa={categoriaSeleccionada === subcategoria.id}
+                            onClick={() => handleSeleccionCategoria(subcategoria.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {tieneProductos && (
+                    <div>
+                      <h4 className="font-semibold text-sm text-gray-700 mb-2">
+                        Productos
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {productosFiltrados
+                          .filter(p => p.categoria === categoriaActual.id)
+                          .map(producto => (
+                            <ProductoCard
+                              key={producto.id}
+                              producto={producto}
+                              onClick={() => {
+                                setProductoSeleccionado(producto);
+                                setCantidadProducto(1);
+                                setObservacionesProducto('');
+                                setDialogProducto(true);
+                              }}
+                            />
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {productosFiltrados.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+                      <Search className="w-12 h-12 mb-2" />
+                      <p className="text-sm text-center">No se encontraron productos</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
-
-          {/* Categorías */}
-          <Card className="flex-1 flex flex-col">
+          {/* Panel Derecho - Ticket por Comensal */}
+          <Card className="w-80 flex flex-col">
             <CardContent className="p-4 flex flex-col h-full">
-              <h3 className="font-bold text-sm mb-3">Categorías</h3>
-              <div
-                onClick={() => setCategoriaSeleccionada(null)}
-                className={`flex items-center gap-2 p-2 mb-2 hover:bg-gray-100 rounded cursor-pointer ${
-                  !categoriaSeleccionada ? 'bg-orange-50 border-l-4 border-orange-500' : ''
-                }`}
-              >
-                <List className="w-4 h-4 text-gray-600" />
-                <span className="text-sm font-medium">Todos</span>
-              </div>
-              <div className="flex-1 overflow-y-auto border-t pt-2">
-                {renderArbolCategorias(categorias.filter(c => !c.parent))}
-              </div>
+              <h3 className="font-bold text-lg mb-4">Ticket del Pedido</h3>
+              
+              <div className="flex-1 overflow-y-auto space-y-4">
+                {Object.keys(detallesPorComensal).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                    <Receipt className="w-12 h-12 mb-2" />
+                    <p className="text-sm text-center">No hay productos en el pedido</p>
+                  </div>
+                ) : (
+                  Object.entries(detallesPorComensal).map(([comensalId, grupo]) => (
+                    <div key={comensalId} className="border rounded-lg p-3 bg-gray-50">
+                      <div className="flex items-center gap-2 mb-2 pb-2 border-b">
+                        <Users className="w-4 h-4 text-orange-500" />
+                        <span className="font-semibold text-sm">
+                          {grupo.comensal?.nombre || 'Sin asignar'}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {grupo.items.map(detalle => {
+                          const colorFondo = obtenerColorProducto(grupo.items, detalle.id, detalle.producto.id);
+                          return (
+                            <div 
+                              key={detalle.id} 
+                              className={`flex justify-between items-start text-xs p-2 rounded ${colorFondo}`}
+                            >
+                              <div className="flex-1">
+                                <p className="font-medium">{detalle.producto.nombre}</p>
+                                <p className="text-gray-600">
+                                  {detalle.cantidad}x ${parseFloat(detalle.precio_unitario).toFixed(2)}
+                                </p>
+                              
+                                {detalle.observaciones && (
+                                  <p className="text-orange-600 text-xs italic mt-1">
+                                    📝 {detalle.observaciones}
+                                  </p>
+                                )}
+                                {detalle.enviado_cocina === true && (
+                                  <span className="text-green-600 text-xs">✓ En cocina</span>
+                                )}
+                              </div>
+                              <span className="font-semibold">
+                                ${parseFloat(detalle.subtotal).toFixed(2)}
+                              </span>
+                              <button
+                                onClick={() => removeProductoDelPedido(detalle)}
+                                disabled={detalle.enviado_cocina}
+                                className={`ml-2 ${
+                                  detalle.enviado_cocina 
+                                    ? 'text-gray-400 cursor-not-allowed' 
+                                    : 'text-red-600 hover:text-red-800'
+                                }`}
+                                title={detalle.enviado_cocina ? 'No se puede eliminar (ya en cocina)' : 'Eliminar producto del pedido'}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-2 pt-2 border-t flex justify-between text-sm font-semibold">
+                        <span>Subtotal:</span>
+                        <span>${grupo.items.reduce((sum, d) => sum + parseFloat(d.subtotal), 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+                </div>
+
+                {detallesPedido.length > 0 && (
+                <div className="mt-4 pt-4 border-t">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="font-bold text-xl">Total:</span>
+                    <span className="font-bold text-2xl text-orange-600">
+                      ${calcularTotalPedido().toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {detallesPedido.filter(d => d.enviado_cocina === true).length} de {detallesPedido.length} en cocina
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Panel Central - Productos */}
-        <Card className="flex-1 flex flex-col">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="Buscar productos..."
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-auto">
-              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {productosFiltrados.map(producto => (
-                  <ProductoCard
-                    key={producto.id}
-                    producto={producto}
-                    onAgregar={agregarProductoAlPedido}
-                    disabled={!comensalSeleccionado}
-                  />
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Panel Derecho - Ticket por Comensal */}
-        <Card className="w-80 flex flex-col">
-          <CardContent className="p-4 flex flex-col h-full">
-            <h3 className="font-bold text-lg mb-4">Ticket del Pedido</h3>
-            
-            <div className="flex-1 overflow-y-auto space-y-4">
-              {Object.keys(detallesPorComensal).length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                  <Receipt className="w-12 h-12 mb-2" />
-                  <p className="text-sm text-center">No hay productos en el pedido</p>
+        {/* Dialog Cantidad de Producto */}
+        <Dialog open={dialogProducto} onOpenChange={setDialogProducto}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Agregar Producto</DialogTitle>
+              <DialogDescription>
+                {productoSeleccionado?.nombre}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600">Precio unitario:</span>
+                  <span className="font-semibold">${parseFloat(productoSeleccionado?.precio || 0).toFixed(2)}</span>
                 </div>
-              ) : (
-                Object.entries(detallesPorComensal).map(([comensalId, grupo]) => (
-                  <div key={comensalId} className="border rounded-lg p-3 bg-gray-50">
-                    <div className="flex items-center gap-2 mb-2 pb-2 border-b">
-                      <Users className="w-4 h-4 text-orange-500" />
-                      <span className="font-semibold text-sm">
-                        {grupo.comensal?.nombre || 'Sin asignar'}
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      {grupo.items.map(detalle => {
-                        const colorFondo = obtenerColorProducto(grupo.items, detalle.id, detalle.producto.id);
-                        return (
-                          <div 
-                            key={detalle.id} 
-                            className={`flex justify-between items-start text-xs p-2 rounded ${colorFondo}`}
-                          >
-                            <div className="flex-1">
-                              <p className="font-medium">{detalle.producto.nombre}</p>
-                              <p className="text-gray-600">
-                                {detalle.cantidad}x ${parseFloat(detalle.precio_unitario).toFixed(2)}
-                              </p>
-                             
-                              {detalle.observaciones && (
-                                <p className="text-orange-600 text-xs italic mt-1">
-                                  📝 {detalle.observaciones}
-                                </p>
-                              )}
-                              {detalle.enviado_cocina === true && (
-                                <span className="text-green-600 text-xs">✓ En cocina</span>
-                              )}
-                            </div>
-                            <span className="font-semibold">
-                              ${parseFloat(detalle.subtotal).toFixed(2)}
-                            </span>
-                            <button
-                              onClick={() => removeProductoDelPedido(detalle)}
-                              disabled={detalle.enviado_cocina}
-                              className={`ml-2 ${
-                                detalle.enviado_cocina 
-                                  ? 'text-gray-400 cursor-not-allowed' 
-                                  : 'text-red-600 hover:text-red-800'
-                              }`}
-                              title={detalle.enviado_cocina ? 'No se puede eliminar (ya en cocina)' : 'Eliminar producto del pedido'}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-2 pt-2 border-t flex justify-between text-sm font-semibold">
-                      <span>Subtotal:</span>
-                      <span>${grupo.items.reduce((sum, d) => sum + parseFloat(d.subtotal), 0).toFixed(2)}</span>
-                    </div>
-                  </div>
-                ))
-              )}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Comensal:</span>
+                  <span className="font-semibold text-orange-600">{comensalSeleccionado?.nombre}</span>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Cantidad {productoSeleccionado?.precio_por_unidad === 'kilogramo' ? '(kg)' : productoSeleccionado?.precio_por_unidad === 'gramo' ? '(gramos)' : ''}
+                </label>
+                <Input
+                      type="number"
+                      step={['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) ? "0.001" : "1"}
+                      min={['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) ? "0.001" : "1"}
+                      max={
+                          productoSeleccionado?.stock && Number(productoSeleccionado.stock) === -1
+                          ? undefined
+                          : (productoSeleccionado?.stock ? Number(productoSeleccionado.stock) : 1)
+                      }
+                      value={cantidadProducto}
+                      onChange={(e) => {
+                          setCantidadProducto(e.target.value); // 👈 STRING
+                      }}
+                      onBlur={() => {
+                          const esUnidadPeso = ['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad);
+
+                          let valor = esUnidadPeso
+                          ? parseFloat(cantidadProducto)
+                          : parseInt(cantidadProducto, 10);
+
+                          if (isNaN(valor)) {
+                          valor = esUnidadPeso ? 0.001 : 1;
+                          }
+
+                          setCantidadProducto(valor);
+                      }}
+                      onFocus={(e) => e.target.select()}
+                      autoFocus
+  />
+                {productoSeleccionado?.stock && Number(productoSeleccionado.stock) === -1 && (
+                  <p className="text-xs text-green-600 mt-1">∞ Stock ilimitado</p>
+                )}
+                {['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Puedes ingresar fracciones (ej: 0.250 {productoSeleccionado?.precio_por_unidad === 'kilogramo' ? 'kg' : 'g'})
+                  </p>
+                )}
               </div>
 
-              {detallesPedido.length > 0 && (
-              <div className="mt-4 pt-4 border-t">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="font-bold text-xl">Total:</span>
-                  <span className="font-bold text-2xl text-orange-600">
-                    ${calcularTotalPedido().toFixed(2)}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Observaciones (opcional)
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Ej: Sin cebolla, bien cocido, extra salsa..."
+                  value={observacionesProducto}
+                  onChange={(e) => setObservacionesProducto(e.target.value)}
+                  maxLength={200}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Notas especiales para la cocina
+                </p>
+              </div>
+
+              <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold">Subtotal:</span>
+                  <span className="text-xl font-bold text-orange-600">
+                    ${(parseFloat(productoSeleccionado?.precio || 0) * cantidadProducto).toFixed(2)}
                   </span>
                 </div>
-                <div className="text-xs text-gray-600">
-                  {detallesPedido.filter(d => d.enviado_cocina === true).length} de {detallesPedido.length} en cocina
-                </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
-      {/* Dialog Cantidad de Producto */}
-      <Dialog open={dialogProducto} onOpenChange={setDialogProducto}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Agregar Producto</DialogTitle>
-            <DialogDescription>
-              {productoSeleccionado?.nombre}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-600">Precio unitario:</span>
-                <span className="font-semibold">${parseFloat(productoSeleccionado?.precio || 0).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Comensal:</span>
-                <span className="font-semibold text-orange-600">{comensalSeleccionado?.nombre}</span>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setDialogProducto(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={confirmarAgregarProducto}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Agregar al Pedido
+                </Button>
               </div>
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Cantidad {productoSeleccionado?.precio_por_unidad === 'kilogramo' ? '(kg)' : productoSeleccionado?.precio_por_unidad === 'gramo' ? '(gramos)' : ''}
-              </label>
-              <Input
-                    type="number"
-                    step={['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) ? "0.001" : "1"}
-                    min={['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) ? "0.001" : "1"}
-                    max={
-                        productoSeleccionado?.stock && Number(productoSeleccionado.stock) === -1
-                        ? undefined
-                        : (productoSeleccionado?.stock ? Number(productoSeleccionado.stock) : 1)
-                    }
-                    value={cantidadProducto}
-                    onChange={(e) => {
-                        setCantidadProducto(e.target.value); // 👈 STRING
-                    }}
-                    onBlur={() => {
-                        const esUnidadPeso = ['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad);
+          </DialogContent>
+        </Dialog>
 
-                        let valor = esUnidadPeso
-                        ? parseFloat(cantidadProducto)
-                        : parseInt(cantidadProducto, 10);
-
-                        if (isNaN(valor)) {
-                        valor = esUnidadPeso ? 0.001 : 1;
-                        }
-
-                        setCantidadProducto(valor);
-                    }}
-                    onFocus={(e) => e.target.select()}
-                    autoFocus
-/>
-              {productoSeleccionado?.stock && Number(productoSeleccionado.stock) === -1 && (
-                <p className="text-xs text-green-600 mt-1">∞ Stock ilimitado</p>
-              )}
-              {['kilogramo', 'gramo'].includes(productoSeleccionado?.precio_por_unidad) && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Puedes ingresar fracciones (ej: 0.250 {productoSeleccionado?.precio_por_unidad === 'kilogramo' ? 'kg' : 'g'})
+        {/* Dialog Agregar Comensales */}
+        <Dialog open={dialogComensal} onOpenChange={setDialogComensal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Agregar Comensales</DialogTitle>
+              <DialogDescription>
+                ¿Cuántos comensales hay en esta mesa?
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={agregarComensal} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Número de comensales</label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="20"
+                  placeholder="Cantidad"
+                  value={numeroComensales}
+                  onChange={(e) => setNumeroComensales(parseInt(e.target.value) || 1)}
+                  required
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  Se crearán con nombres automáticos: Comensal 1, Comensal 2, etc.
                 </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Observaciones (opcional)
-              </label>
-              <Input
-                type="text"
-                placeholder="Ej: Sin cebolla, bien cocido, extra salsa..."
-                value={observacionesProducto}
-                onChange={(e) => setObservacionesProducto(e.target.value)}
-                maxLength={200}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Notas especiales para la cocina
-              </p>
-            </div>
-
-            <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-              <div className="flex justify-between items-center">
-                <span className="font-semibold">Subtotal:</span>
-                <span className="text-xl font-bold text-orange-600">
-                  ${(parseFloat(productoSeleccionado?.precio || 0) * cantidadProducto).toFixed(2)}
-                </span>
               </div>
-            </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setDialogComensal(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Agregar {numeroComensales} {numeroComensales === 1 ? 'Comensal' : 'Comensales'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+      {/* Selector de comensales */}
+      <div className="flex flex-row">
+        <div className="flex overflow-x-auto space-x-2 pt-2 bg-white border-t">    
+          <button
+            onClick={() => setDialogComensal(true)}
+            className="flex-shrink-0 px-4 py-2 rounded-lg text-sm bg-green-500 text-white hover:bg-green-600 transition-colors"
+          >
+            <Plus className="w-3 h-3 inline mr-2" />
+            Agregar
+          </button>
+          {comensales.map((comensal, index) => (
+            <button
+              key={comensal.id}
+              onClick={() => seleccionarComensal(comensal)}
+              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm transition-colors ${
+                comensalSeleccionado?.id === comensal.id
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              <Users className="w-3 h-3 inline mr-2" />
+              ({index})
+            
+            </button>
+          ))}
+          {comensales.length === 0 && (
+            <p className="text-xs text-gray-500 text-center py-2">
+              Agrega Comensales para comenzar a pedir
+            </p>
+          )}
+        </div>
 
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setDialogProducto(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={confirmarAgregarProducto}>
-                <Plus className="w-4 h-4 mr-2" />
-                Agregar al Pedido
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog Agregar Comensales */}
-      <Dialog open={dialogComensal} onOpenChange={setDialogComensal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Agregar Comensales</DialogTitle>
-            <DialogDescription>
-              ¿Cuántos comensales hay en esta mesa?
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={agregarComensal} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Número de comensales</label>
-              <Input
-                type="number"
-                min="1"
-                max="20"
-                placeholder="Cantidad"
-                value={numeroComensales}
-                onChange={(e) => setNumeroComensales(parseInt(e.target.value) || 1)}
-                required
-                autoFocus
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                Se crearán con nombres automáticos: Comensal 1, Comensal 2, etc.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setDialogComensal(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit">
-                <Plus className="w-4 h-4 mr-2" />
-                Agregar {numeroComensales} {numeroComensales === 1 ? 'Comensal' : 'Comensales'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </div>
+        
+      </div>
+    </>
   );
 }

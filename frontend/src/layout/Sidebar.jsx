@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { use, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { usePOS } from '@/context/POSContext';
@@ -17,6 +17,7 @@ import {
   Table 
 } from 'lucide-react';
 import { ConPermiso } from '@/components/ConPermiso';
+import path from 'path';
 
 
 export default function Sidebar() {
@@ -25,17 +26,30 @@ export default function Sidebar() {
   const { userRol } = usePOS();
   const [collapsed, setCollapsed] = useState(false);
   
-  const menuItems = [ 
-    { path: '/productos', icon: Package, label: 'Productos' },
-    { path: '/inventario', icon: Warehouse, label: 'Inventario' },
-    { path: '/mesas', icon: LayoutGrid, label: 'Mesas' },
-    { path: '/usuarios', icon: Users, label: 'Usuarios' },
-    { path: '/caja', icon: CreditCard, label: 'Caja' },
+  const menuItems = [
+    ...(userRol === 'mesero' || userRol === 'admin' ? [
+      {path: '/mesas', icon: Table, label: 'Mesas' }
+    ] : []),
+    ...(userRol === 'admin' || userRol === 'cocinero' ? [
+      {path: '/ordenes', icon: LayoutGrid, label: 'Órdenes' }
+
+    ] : []),
+    ...(userRol === 'admin' || userRol === 'cajero' ? [
+      {path: '/caja', icon: CreditCard, label: 'Caja' },
+      {path: '/usuarios', icon: Users, label: 'Usuarios' },
+      {path: '/inventario', icon: Warehouse, label: 'Inventario' },
+    ] : []),
     ...(userRol === 'admin' ? [
       { path: '/restaurantes', icon: Store, label: 'Restaurantes' },
       { path: '/restaurante', icon: Settings, label: 'Configuración' }
     ] : [])
   ];
+
+  // { path: '/productos', icon: Package, label: 'Productos' },
+    // { path: '/inventario', icon: Warehouse, label: 'Inventario' },
+    // { path: '/mesas', icon: LayoutGrid, label: 'Mesas' },
+    // { path: '/usuarios', icon: Users, label: 'Usuarios' },
+    // { path: '/caja', icon: CreditCard, label: 'Caja' },
   
   const handleLogout = () => {
     localStorage.removeItem('token');

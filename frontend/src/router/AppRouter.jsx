@@ -80,6 +80,7 @@ export default function AppRouter() {
             </RutaProtegida>
           } />
         </Route>
+          <Route path="*" element={<SinPermiso />} />
       </Routes>
     </BrowserRouter>
   );

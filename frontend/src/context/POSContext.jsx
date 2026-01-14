@@ -19,6 +19,7 @@ export const POSProvider = ({ children }) => {
   const [pedidoActivo, setPedidoActivo] = useState(null);
   const [comensalSeleccionado, setComensalSeleccionado] = useState(null);
   const [carrito, setCarrito] = useState([]);
+  const [showSidebar, setShowSidebar] = useState(true);
 
 
   const cargarUsuarioYPermisos = async () => {
@@ -185,6 +186,7 @@ export const POSProvider = ({ children }) => {
     setUserRol(null);
     setPermisos([]);
     resetearPOS();
+    setShowSidebar(true);
   }, [resetearPOS]);
 
   const value = {
@@ -224,6 +226,10 @@ export const POSProvider = ({ children }) => {
     
     // Reset general
     resetearPOS,
+
+    // Layout
+    showSidebar,
+    setShowSidebar,
   };
 
   return (

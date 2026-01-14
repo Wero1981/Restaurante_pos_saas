@@ -235,7 +235,7 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
   };
 
   return (
-    <div className="h-[calc(100vh-80px)] flex flex-col">
+    <div className="h-[calc(100vh-80px)] gap-4 flex flex-col">
       {/* Header */}
       <div className="p-4 bg-white border-b flex justify-between items-center">
         <div>

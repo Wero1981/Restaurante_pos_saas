@@ -32,12 +32,24 @@ export default function Login() {
                 localStorage.setItem('restaurante_id', userInfo.restaurante_id);
             }
             
-            console.log('✅ Login exitoso. Usuario guardado:', userInfo);
-            
+         
             // Cargar permisos del usuario en el contexto
             await cargarUsuarioYPermisos();
+            let rol = userInfo.rol;
             
-            navigate('/productos');
+            switch (rol) {
+                case 'admin':
+                    navigate('/restaurantes');
+                    break;
+                case 'mesero':
+                    navigate('/mesas');
+                    break;
+                case 'cocinero':
+                    navigate('/ordenes');
+                    break;
+                default:
+                    navigate('/login');
+            }
         } catch (error) {
             console.error("Login failed:", error);
             setError("Email o contraseña incorrectos");

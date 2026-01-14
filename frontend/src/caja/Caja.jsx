@@ -19,7 +19,8 @@ import {
   CheckCircle,
   Lock,
   Unlock,
-  Search
+  Search,
+  Loader2
 } from "lucide-react";
 
 export default function Caja() {
@@ -41,6 +42,11 @@ export default function Caja() {
   const [dialogExito, setDialogExito] = useState(false);
   const [montoPagado, setMontoPagado] = useState('');
   const [procesando, setProcesando] = useState(false);
+  const [dialogCierre, setDialogCierre] = useState(false);
+  const [resumenCaja, setResumenCaja] = useState(null);
+  const [cargandoResumen, setCargandoResumen] = useState(false);
+  const [cerrandoCaja, setCerrandoCaja] = useState(false);
+  const [errorResumen, setErrorResumen] = useState(null);
   
   // Estados para mesas con cuentas abiertas
   const [mesasConCuentas, setMesasConCuentas] = useState([]);
@@ -110,6 +116,14 @@ export default function Caja() {
       setCargandoMesas(false);
     }
   }, [restauranteSeleccionado]);
+
+  const formatearMonto = (valor) => {
+    const numero = Number(valor || 0);
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN'
+    }).format(Number.isFinite(numero) ? numero : 0);
+  };
 
   // Verificar si hay caja abierta al cargar
   useEffect(() => {
@@ -236,6 +250,7 @@ export default function Caja() {
       
       if (res.data && res.data.length > 0) {
         setCajaActual(res.data[0]);
+        console.log('Caja abierta encontrada:', res.data[0]);
         setCajaAbierta(true);
       } else {
         setCajaAbierta(false);
@@ -309,47 +324,102 @@ export default function Caja() {
     }
   };
 
+  const obtenerResumenCaja = async () => {
+    if (!cajaActual) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Sin caja activa',
+        text: 'Abre una caja antes de intentar cerrarla.',
+        confirmButtonColor: '#f97316'
+      });
+      return null;
+    }
+
+    setErrorResumen(null);
+    setCargandoResumen(true);
+
+    try {
+      const res = await api.get(`/caja/cajas/${cajaActual.id}/resumen/`);
+      console.log('Resumen de caja obtenido:', res.data);
+      setResumenCaja(res.data);
+      return res.data;
+    } catch (error) {
+      console.error('Error obteniendo resumen de caja:', error);
+      const mensaje = error.response?.data?.detail || 'No se pudo obtener el resumen de la caja';
+      setErrorResumen(mensaje);
+      return null;
+    } finally {
+      setCargandoResumen(false);
+    }
+  };
+
+  const mostrarDialogoCierre = async () => {
+    if (!cajaActual) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Sin caja activa',
+        text: 'Abre una caja antes de intentar cerrarla.',
+        confirmButtonColor: '#f97316'
+      });
+      return;
+    }
+
+    setDialogCierre(true);
+    await obtenerResumenCaja();
+  };
+
+  const cerrarDialogoCierre = () => {
+    setDialogCierre(false);
+    setResumenCaja(null);
+    setErrorResumen(null);
+  };
+
   const cerrarCaja = async () => {
-    const result = await Swal.fire({
-      icon: 'warning',
-      title: '¿Cerrar caja?',
-      text: 'Esta acción no se puede deshacer',
-      showCancelButton: true,
-      confirmButtonColor: '#f97316',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Sí, cerrar',
-      cancelButtonText: 'Cancelar'
-    });
+    if (!cajaActual) {
+      return;
+    }
 
-    if (result.isConfirmed) {
-      try {
-        // Calcular monto final (aquí podrías incluir cálculos basados en ventas)
-        await api.patch(`/caja/cajas/${cajaActual.id}/`, {
-          abierta: false,
-          fecha_cierre: new Date().toISOString(),
-          monto_final: cajaActual.monto_inicial // Aquí podrías calcular el monto real
-        });
+    setCerrandoCaja(true);
+    try {
+      const res = await api.post(`/caja/cajas/${cajaActual.id}/cerrar/`, {
+        automatico: false
+      });
 
-        setCajaAbierta(false);
-        setCajaActual(null);
+      const resumenFinal = res.data;
+      setResumenCaja(resumenFinal);
+      setCajaAbierta(false);
+      setCajaActual(null);
+      setDialogCierre(false);
+      setMesasConCuentas([]);
+      setMesaSeleccionadaLocal(null);
+      setPedidoMesa(null);
 
-        Swal.fire({
-          icon: 'success',
-          title: '¡Caja cerrada!',
-          text: 'La caja se ha cerrado correctamente',
-          confirmButtonColor: '#f97316',
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } catch (error) {
-        console.error('Error cerrando caja:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'No se pudo cerrar la caja',
-          confirmButtonColor: '#f97316'
-        });
-      }
+      Swal.fire({
+        icon: 'success',
+        title: '¡Caja cerrada!',
+        html: `
+          <div class="text-left space-y-2">
+            <p><strong>Total de ventas:</strong> ${formatearMonto(resumenFinal?.ventas?.total)}</p>
+            <p><strong>Ventas en efectivo:</strong> ${formatearMonto(resumenFinal?.ventas?.por_metodo?.efectivo)}</p>
+            <p><strong>Ventas con tarjeta:</strong> ${formatearMonto(resumenFinal?.ventas?.por_metodo?.tarjeta)}</p>
+            <p><strong>Entradas adicionales:</strong> ${formatearMonto(resumenFinal?.movimientos?.entradas)}</p>
+            <p><strong>Salidas:</strong> ${formatearMonto(resumenFinal?.movimientos?.salidas)}</p>
+            <p><strong>Monto final:</strong> ${formatearMonto(resumenFinal?.monto_final)}</p>
+          </div>
+        `,
+        confirmButtonColor: '#f97316'
+      });
+    } catch (error) {
+      console.error('Error cerrando caja:', error);
+      const mensaje = error.response?.data?.detail || 'No se pudo cerrar la caja';
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: mensaje,
+        confirmButtonColor: '#f97316'
+      });
+    } finally {
+      setCerrandoCaja(false);
     }
   };
 
@@ -410,10 +480,11 @@ export default function Caja() {
 
       } catch (error) {
         console.error('Error procesando venta:', error);
+        const mensaje = error.response?.data?.non_field_errors?.[0] || error.response?.data?.detail || 'Error al procesar la venta';
         Swal.fire({
           icon: 'error',
           title: 'Error',
-          text: 'Error al procesar la venta',
+          text: mensaje,
           confirmButtonColor: '#f97316'
         });
       } finally {
@@ -477,10 +548,11 @@ export default function Caja() {
 
     } catch (error) {
       console.error('Error procesando venta:', error);
+      const mensaje = error.response?.data?.non_field_errors?.[0] || error.response?.data?.detail || 'Error al procesar la venta';
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Error al procesar la venta',
+        text: mensaje,
         confirmButtonColor: '#f97316'
       });
     } finally {
@@ -761,7 +833,7 @@ export default function Caja() {
                 <span className="font-semibold text-green-600">Caja Abierta</span>
               </div>
               <div className="text-sm text-gray-600 space-y-1">
-                <p>Monto inicial: <span className="font-semibold">${cajaActual?.monto_inicial}</span></p>
+                <p>Monto inicial: <span className="font-semibold">{formatearMonto(cajaActual?.monto_inicial)}</span></p>
                 <p className="text-xs text-gray-500">
                   {new Date(cajaActual?.fecha_apertura).toLocaleString('es-ES')}
                 </p>
@@ -769,7 +841,7 @@ export default function Caja() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={cerrarCaja}
+                onClick={mostrarDialogoCierre}
                 className="w-full mt-3 text-red-600 hover:text-red-700 hover:bg-red-50"
               >
                 <Lock className="w-3 h-3 mr-2" />
@@ -1148,6 +1220,178 @@ export default function Caja() {
       </div>
 
       {/* Dialog de Pago */}
+      <Dialog
+        open={dialogCierre}
+        onOpenChange={(open) => {
+          if (!open) {
+            cerrarDialogoCierre();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Resumen de cierre de caja</DialogTitle>
+          </DialogHeader>
+
+          {cargandoResumen ? (
+            <div className="py-10 flex justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+            </div>
+          ) : errorResumen ? (
+            <div className="space-y-4">
+              <p className="text-sm text-red-600">{errorResumen}</p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={cerrarDialogoCierre}>
+                  Cancelar
+                </Button>
+                <Button className="bg-orange-500 hover:bg-orange-600" onClick={obtenerResumenCaja}>
+                  Reintentar
+                </Button>
+              </div>
+            </div>
+          ) : resumenCaja ? (
+            <div className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-gray-500">Ventas registradas</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-gray-800">{formatearMonto(resumenCaja?.ventas?.total)}</p>
+                    <p className="text-xs text-gray-500 mt-1">{resumenCaja?.ventas?.conteo || 0} tickets</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-gray-500">Ventas en efectivo</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-lg font-semibold text-gray-700">{formatearMonto(resumenCaja?.ventas?.por_metodo?.efectivo)}</p>
+                    <p className="text-xs text-gray-500">Incluye propinas en efectivo</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-gray-500">Ventas con tarjeta y otros</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-lg font-semibold text-gray-700">{formatearMonto((Number(resumenCaja?.ventas?.por_metodo?.tarjeta) || 0) + (Number(resumenCaja?.ventas?.por_metodo?.otros) || 0))}</p>
+                    <p className="text-xs text-gray-500">Tarjeta: {formatearMonto(resumenCaja?.ventas?.por_metodo?.tarjeta)} · Otros: {formatearMonto(resumenCaja?.ventas?.por_metodo?.otros)}</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Detalle de ventas</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {resumenCaja?.ventas?.detalle?.length ? (
+                    <div className="max-h-56 overflow-y-auto divide-y border rounded-md">
+                      {resumenCaja.ventas.detalle.map((venta) => (
+                        <div key={venta.id} className="flex items-center justify-between px-4 py-3 text-sm">
+                          <div className="flex-1 pr-3">
+                            <p className="font-semibold text-gray-800">Venta #{venta.id}</p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(venta.created_at).toLocaleString('es-ES', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                            {venta.pedido ? (
+                              <p className="text-xs text-gray-500">Pedido asociado: {venta.pedido}</p>
+                            ) : null}
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-gray-800">{formatearMonto(venta.total)}</p>
+                            <p className="text-xs uppercase tracking-wide text-gray-500">{venta.metodo_pago}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No hay ventas registradas aún.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Movimientos manuales</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex gap-4 text-sm">
+                    <span className="text-green-600">Entradas: {formatearMonto(resumenCaja?.movimientos?.entradas)}</span>
+                    <span className="text-red-600">Salidas: {formatearMonto(resumenCaja?.movimientos?.salidas)}</span>
+                  </div>
+                  {resumenCaja?.movimientos?.detalle?.length ? (
+                    <div className="max-h-48 overflow-y-auto space-y-2 text-sm">
+                      {resumenCaja.movimientos.detalle.map((mov) => (
+                        <div key={mov.id} className="flex justify-between items-start border rounded-md px-3 py-2">
+                          <div className="flex-1 pr-2">
+                            <p className="font-medium capitalize text-gray-700">{mov.tipo}</p>
+                            {mov.descripcion ? (
+                              <p className="text-xs text-gray-500 mt-1">{mov.descripcion}</p>
+                            ) : null}
+                          </div>
+                          <div className={`text-sm font-semibold ${mov.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
+                            {formatearMonto(mov.monto)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No hay movimientos manuales registrados.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Resultado esperado en caja</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <p>Monto inicial: <span className="font-semibold">{formatearMonto(resumenCaja?.caja?.monto_inicial)}</span></p>
+                  <p>+ Ventas en efectivo: <span className="font-semibold">{formatearMonto(resumenCaja?.ventas?.por_metodo?.efectivo)}</span></p>
+                  <p>+ Entradas manuales: <span className="font-semibold">{formatearMonto(resumenCaja?.movimientos?.entradas)}</span></p>
+                  <p>- Salidas manuales: <span className="font-semibold">{formatearMonto(resumenCaja?.movimientos?.salidas)}</span></p>
+                  <p className="text-lg font-bold text-gray-800 pt-2">Monto final esperado: {formatearMonto(resumenCaja?.monto_final)}</p>
+                  {resumenCaja?.generado_en && (
+                    <p className="text-xs text-gray-500">
+                      Cortado al {new Date(resumenCaja.generado_en).toLocaleString('es-ES')}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={obtenerResumenCaja}>
+                  Actualizar resumen
+                </Button>
+                <Button
+                  onClick={cerrarCaja}
+                  className="bg-red-600 hover:bg-red-700"
+                  disabled={cerrandoCaja}
+                >
+                  {cerrandoCaja ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cerrando...
+                    </span>
+                  ) : (
+                    'Confirmar cierre'
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">No hay información disponible del resumen.</p>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={dialogPago} onOpenChange={setDialogPago}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

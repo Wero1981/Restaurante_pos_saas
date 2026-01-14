@@ -3,6 +3,7 @@ from drf_spectacular.utils import extend_schema_field
 from .models import Venta, VentaDetalle, Mesa, Comensal, PedidoDetalle, Pedido
 from productos.models  import Producto
 from restaurantes.models import UsuarioRestaurante
+from caja.models import Caja
 
 
 
@@ -27,10 +28,11 @@ class VentaSerializer(serializers.ModelSerializer):
         required=False, 
         allow_null=True
     )
+    caja = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = Venta
-        fields = ['total', 'metodo_pago', 'detalles', 'pedido']
+        fields = ['total', 'metodo_pago', 'detalles', 'pedido', 'caja']
 
     def create(self, validated_data):
         detalles = validated_data.pop('detalles')
@@ -38,10 +40,20 @@ class VentaSerializer(serializers.ModelSerializer):
         request = self.context['request']
         restaurante = get_restaurante_usuario(request.user)
 
+        caja_abierta = Caja.objects.filter(
+            restaurante=restaurante,
+            abierta=True
+        ).order_by('-fecha_apertura').first()
+
+        if not caja_abierta:
+            raise serializers.ValidationError('No hay una caja abierta para registrar la venta.')
+
         venta = Venta.objects.create(
             usuario=request.user,
             restaurante=restaurante,
             pedido=pedido,
+            caja=caja_abierta,
+            estado='pagada',
             **validated_data
         )
 

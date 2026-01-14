@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ChevronRight, ChevronDown, Plus, Search, Edit, Trash2, FolderPlus, Package } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Search, Edit, Trash2, FolderPlus, Package, PackageOpen } from "lucide-react";
 
 export default function Inventario() {
   const [categorias, setCategorias] = useState([]);
@@ -234,6 +234,28 @@ export default function Inventario() {
               title="Eliminar categoría"
             >
               <Trash2 className="w-4 h-4 text-red-600" />
+            </button>
+            {/* Agregar producto */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setProductoForm({
+                  id: null,
+                  nombre: '',
+                  descripcion: '',
+                  precio: '',
+                  precio_por_unidad: 'unidad',
+                  stock: 0,
+                  stock_ilimitado: false,
+                  categoria: cat.id,
+                  activo: true
+                });
+                setDialogProducto(true);
+              }}
+              className="p-1 hover:bg-green-100 rounded"
+              title="Agregar producto"
+            >
+              <PackageOpen className="w-4 h-4 text-green-600" />
             </button>
           </div>
         </div>
