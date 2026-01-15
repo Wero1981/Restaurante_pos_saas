@@ -1,28 +1,28 @@
-import { createLucideIcon } from "lucide-react";
+import React from 'react';
 
-const __iconNodeComensal = [
-  [
-    "path",
-    {
-      d: "M 6.8799409,7.4075572 V 6.5934919 A 1.0587757,1.6281306 0 0 0 5.8211651,4.9653612 H 4.2330015 A 1.0587757,1.6281306 0 0 0 3.1742257,6.5934919 v 0.8140653"
-    }
-  ],
-  [
-    "ellipse",
-    {
-      cx: "4.9427328",
-      cy: "3.2771428",
-      rx: "0.99895334",
-      ry: "1.0885756"
-    }
-  ],
-  [
-    "path",
-    {
-      d: "M 4.4112599,5.0083021 4.0000519,6.7269407 6.1720735,6.7058531 5.687059,4.9766708"
-    }
-  ]
-];
+const PlateIcon = ({ size = 48, color = "currentColor" }) => {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {/* El Círculo (Plato) */}
+      <circle cx="12" cy="12" r="10" />
+      
+      {/* Cubiertos (Tus nodos de Lucide) */}
+      <path d="m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8" />
+      <path d="M15 15 3.3 3.3a4.2 4.2 0 0 0 0 6l7.3 7.3c.7.7 2 .7 2.8 0L15 15Zm0 0 7 7" />
+      <path d="m2.1 21.8 6.4-6.3" />
+      <path d="m19 5-7 7" />
+    </svg>
+  );
+};
 
-const Comensal = createLucideIcon("Comensal", __iconNodeComensal);
-export default Comensal;
+export default PlateIcon;

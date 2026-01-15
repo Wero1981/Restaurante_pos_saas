@@ -20,12 +20,20 @@ import {
   Lock,
   Unlock,
   Search,
+  ArrowLeftRight,
+  CircleDollarSign,
+  PlusCircle, 
+  X,
   Loader2
 } from "lucide-react";
+
+
+
 
 export default function Caja() {
   const navigate = useNavigate();
   const { seleccionarMesa: seleccionarMesaContexto, establecerPedidoActivo } = usePOS();
+
 
   // Estados para caja
   const [cajaAbierta, setCajaAbierta] = useState(false);
@@ -35,6 +43,9 @@ export default function Caja() {
   const [cargandoCaja, setCargandoCaja] = useState(true);
   const [restaurantes, setRestaurantes] = useState([]);
   const [restauranteSeleccionado, setRestauranteSeleccionado] = useState(null);
+  const [tipoMovimiento, setTipoMovimiento] = useState('entrada');
+  const [montoMovimiento, setMontoMovimiento] = useState('');
+  const [descripcionMovimiento, setDescripcionMovimiento] = useState('');
 
   // Estados para POS (pagos)
   const [metodoPago, setMetodoPago] = useState('efectivo');
@@ -47,6 +58,9 @@ export default function Caja() {
   const [cargandoResumen, setCargandoResumen] = useState(false);
   const [cerrandoCaja, setCerrandoCaja] = useState(false);
   const [errorResumen, setErrorResumen] = useState(null);
+
+  //Estado Drawer
+  const [isOpenDrawer, setIsOpenDrawer] = useState(false);
   
   // Estados para mesas con cuentas abiertas
   const [mesasConCuentas, setMesasConCuentas] = useState([]);
@@ -59,6 +73,40 @@ export default function Caja() {
   const [productos, setProductos] = useState([]);
   const [busquedaProducto, setBusquedaProducto] = useState('');
   const [carritoRapido, setCarritoRapido] = useState([]);
+
+  //Drawer
+  const handleCloseDrawer = () => {
+    setIsOpenDrawer(false);
+    setMontoMovimiento('');
+    setDescripcionMovimiento('');
+    setTipoMovimiento('entrada');
+  };
+
+  const submitMovimiento = async (event) => {
+    event.preventDefault();
+    if (!montoMovimiento || Number(montoMovimiento) <= 0) {
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'warning',
+        text: 'Ingresa un monto válido para el movimiento.',
+        timer: 2500,
+        showConfirmButton: false,
+      });
+      return;
+    }
+
+    const resultado = await handleRegistrarMovimiento(
+      tipoMovimiento,
+      montoMovimiento,
+      descripcionMovimiento
+    );
+
+    if (resultado) {
+      await obtenerResumenCaja();
+      handleCloseDrawer();
+    }
+  };
 
   // Funciones con useCallback (definidas antes de los useEffect)
   const cargarProductos = useCallback(async () => {
@@ -422,6 +470,42 @@ export default function Caja() {
       setCerrandoCaja(false);
     }
   };
+  const handleRegistrarMovimiento = async (tipo, monto, descripcion) => {
+    if (!cajaActual) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Sin caja activa',
+        text: 'Abre una caja antes de registrar movimientos.',
+        toast: true,
+        position: 'top-end',
+        timer: 3000,
+        showConfirmButton: false,
+        timerProgressBar: true,
+      });
+      return;
+    }
+    try {
+      const payload = {
+        caja: cajaActual.id,
+        tipo: tipo,
+        monto: parseFloat(monto),
+        descripcion: descripcion
+      };
+      const res = await api.post(`caja/movimientos/`, payload);
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        text: `Movimiento de ${tipo} registrado`,
+        timer: 2000,
+        showConfirmButton: false,
+      });
+      return res.data;
+    } catch (error) {
+      console.error('Error registrando movimiento:', error);
+    }
+  };
+
 
   const calcularCambio = () => {
     const pago = parseFloat(montoPagado) || 0;
@@ -824,6 +908,81 @@ export default function Caja() {
               </div>
             )}
           </div>
+
+          <div className="relative">
+         
+            {isOpenDrawer ? (
+              <div className="absolute right-0 top-0 z-20 w-80 rounded-lg border border-gray-200 bg-white shadow-xl">
+                <div className="flex items-center justify-between border-b px-4 py-3">
+                  <h3 className="text-sm font-semibold text-gray-800">Registrar movimiento</h3>
+                  <button
+                    type="button"
+                    onClick={handleCloseDrawer}
+                    className="rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    aria-label="Cerrar panel de movimientos"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <form onSubmit={submitMovimiento} className="space-y-4 p-4">
+                  <div className='flex flex-row gap-4'>
+                    <button
+                      type="button"
+                      onClick={() => setTipoMovimiento('entrada')}
+                      className={`flex-1 px-3 py-2 rounded-l-md border ${
+                        tipoMovimiento === 'entrada'
+                          ? 'bg-green-500 text-white border-green-500'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      Entrada
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTipoMovimiento('salida')}
+                      className={`flex-1 px-3 py-2 rounded-r-md border ${
+                        tipoMovimiento === 'salida'
+                          ? 'bg-red-500 text-white border-red-500'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      Salida
+                    </button>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Monto</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={montoMovimiento}
+                      onChange={(e) => setMontoMovimiento(e.target.value)}
+                      placeholder="0.00"
+                      className="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-orange-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Descripción (opcional)</label>
+                    <input
+                      type="text"
+                      value={descripcionMovimiento}
+                      onChange={(e) => setDescripcionMovimiento(e.target.value)}
+                      placeholder="Describe el movimiento"
+                      className="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-orange-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={handleCloseDrawer}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" size="sm" className="bg-blue-600 hover:bg-blue-700">
+                      Registrar
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            ) : null}
+          </div>
           
           {/* Información de la caja abierta */}
           <Card className="min-w-[250px]">
@@ -837,18 +996,30 @@ export default function Caja() {
                 <p className="text-xs text-gray-500">
                   {new Date(cajaActual?.fecha_apertura).toLocaleString('es-ES')}
                 </p>
+              </div>            
+              <div className='flex flex-row gap-2'>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={mostrarDialogoCierre}
+                  className="w-full mt-3 text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <Lock className="w-3 h-3 mr-2" />
+                </Button>
+                  <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsOpenDrawer(true)}
+                  className="w-full mt-3 text-orange-500 hover:text-orange-500 hover:bg-orange-50"
+                >
+                  <CircleDollarSign /> 
+                  <ArrowLeftRight />
+                  
+                </Button>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={mostrarDialogoCierre}
-                className="w-full mt-3 text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <Lock className="w-3 h-3 mr-2" />
-                Cerrar Caja
-              </Button>
             </CardContent>
           </Card>
+
         </div>
       </div>
 
@@ -1227,8 +1398,10 @@ export default function Caja() {
             cerrarDialogoCierre();
           }
         }}
+
+        className="overflow-auto"
       >
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Resumen de cierre de caja</DialogTitle>
           </DialogHeader>
@@ -1499,4 +1672,3 @@ export default function Caja() {
     </div>
   );
 }
-

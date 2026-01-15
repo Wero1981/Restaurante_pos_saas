@@ -21,9 +21,11 @@ import { ChevronRight,
   Send, 
   ArrowLeft, 
   Receipt, 
-  Trash2
+  Trash2,
+  UtensilsCrossed
      } from "lucide-react";
 import ProductoCard from '../productos/producto';
+import PlateIcon from '../icons/Comensal.jsx';
 
 
 export default function Pedido() {
@@ -43,6 +45,7 @@ export default function Pedido() {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [detallesPedido, setDetallesPedido] = useState([]);
+  const [modoRapido, setModoRapido] = useState(false);
   
   const categoriasPrincipales = useMemo(() => {
     const lista = Array.isArray(categorias) ? categorias : [];
@@ -213,8 +216,8 @@ export default function Pedido() {
     }
   };
 
-  const agregarComensal = async (e) => {
-    e.preventDefault();
+  const agregarComensal = async () => {
+    const numeroComensales = 1; // Siempre agregar 1 comensal
     try {
       const nuevosComensales = [];
       for (let i = 1; i <= numeroComensales; i++) {
@@ -520,8 +523,8 @@ export default function Pedido() {
                 </div>
               )}
 
-              <div className="mb-4">
-                <div className="relative">
+              <div className="mb-4 flex">
+                <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
                     placeholder="Buscar productos..."
@@ -530,6 +533,15 @@ export default function Pedido() {
                     className="pl-10"
                   />
                 </div>
+                {/* modo rapido */}
+                <Button
+                type="button"
+                variant={modoRapido ? 'default' : 'outline'}
+                onClick={() => setModoRapido(!modoRapido)}
+                className={modoRapido ? 'bg-orange-500 hover:bg-orange-600 text-white' : ''}
+              >
+                {modoRapido ? 'Modo Rápido' : 'Modo Normal'}
+              </Button>
               </div>
 
               <div className="flex-1 overflow-auto">
@@ -562,14 +574,11 @@ export default function Pedido() {
                           .filter(p => p.categoria === categoriaActual.id)
                           .map(producto => (
                             <ProductoCard
-                              key={producto.id}
+                                key={producto.id}
                               producto={producto}
-                              onClick={() => {
-                                setProductoSeleccionado(producto);
-                                setCantidadProducto(1);
-                                setObservacionesProducto('');
-                                setDialogProducto(true);
-                              }}
+                              onAgregar={agregarProductoAlPedido}
+                              modoRapido={modoRapido}
+                            
                             />
                           ))}
                       </div>
@@ -776,54 +785,17 @@ export default function Pedido() {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog Agregar Comensales */}
-        <Dialog open={dialogComensal} onOpenChange={setDialogComensal}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Agregar Comensales</DialogTitle>
-              <DialogDescription>
-                ¿Cuántos comensales hay en esta mesa?
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={agregarComensal} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Número de comensales</label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="20"
-                  placeholder="Cantidad"
-                  value={numeroComensales}
-                  onChange={(e) => setNumeroComensales(parseInt(e.target.value) || 1)}
-                  required
-                  autoFocus
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  Se crearán con nombres automáticos: Comensal 1, Comensal 2, etc.
-                </p>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setDialogComensal(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Agregar {numeroComensales} {numeroComensales === 1 ? 'Comensal' : 'Comensales'}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
       {/* Selector de comensales */}
       <div className="flex flex-row">
         <div className="flex overflow-x-auto space-x-2 pt-2 bg-white border-t">    
           <button
-            onClick={() => setDialogComensal(true)}
+            onClick={() => agregarComensal()}
             className="flex-shrink-0 px-4 py-2 rounded-lg text-sm bg-green-500 text-white hover:bg-green-600 transition-colors"
           >
-            <Plus className="w-3 h-3 inline mr-2" />
-            Agregar
+             <span className="flex items-center justify-center w-10 h-10 rounded-full bg-white text-primary shadow">
+              <UtensilsCrossed size={20} />
+             </span>
           </button>
           {comensales.map((comensal, index) => (
             <button
@@ -836,7 +808,7 @@ export default function Pedido() {
               }`}
             >
               <Users className="w-3 h-3 inline mr-2" />
-              ({index})
+              ({index + 1})
             
             </button>
           ))}
@@ -846,8 +818,6 @@ export default function Pedido() {
             </p>
           )}
         </div>
-
-        
       </div>
     </>
   );
