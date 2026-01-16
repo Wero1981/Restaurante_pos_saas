@@ -141,6 +141,7 @@ class PedidoDetalleSerializer(serializers.ModelSerializer):
             'subtotal',
             'observaciones',
             'enviado_cocina',
+            'cancelado',
             'fecha']
     
     @extend_schema_field({
@@ -179,4 +180,4 @@ class PedidoSerializer(serializers.ModelSerializer):
         ]
     
     def get_total(self, obj):
-        return sum(item.subtotal for item in obj.items.all())   
+        return sum(item.subtotal for item in obj.items.filter(cancelado=False))   

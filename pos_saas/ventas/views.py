@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework import status
 from rest_framework.decorators import action
 from django.db import transaction
+from django.utils import timezone
 from decimal import Decimal
 from .models import Venta, Mesa, Pedido, PedidoDetalle, Comensal
 from .serializers import (
@@ -192,6 +193,76 @@ class AbrirPedidoView(APIView):
             'estado': pedido.estado,
             'creado': pedido.creado
         }, status=status.HTTP_201_CREATED)
+
+class CancelarPedidoView(APIView):
+    """Vista para cancelar un pedido existente."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'pedido_id': {
+                        'type': 'integer',
+                        'description': 'ID del pedido a cancelar'
+                    }
+                },
+                'required': ['pedido_id']
+            }
+        },
+        responses={
+            200: {'description': 'Pedido cancelado exitosamente'},
+            400: {'description': 'Error en la solicitud'},
+            404: {'description': 'Pedido no encontrado'}
+        },
+        description="Cancela un pedido existente y libera la mesa asociada."
+    )
+    def post(self, request):
+        restaurante = get_restaurante_usuario(request.user)
+        if not restaurante:
+            return Response(
+                {'error': 'Usuario no está asociado a ningún restaurante'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        pedido_id = request.data.get('pedido_id')
+
+        if not pedido_id:
+            return Response(
+                {'error': 'El campo pedido_id es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Verificar que el pedido existe, pertenece al restaurante y está abierto
+        try:
+            pedido = Pedido.objects.get(
+                id=pedido_id,
+                restaurante=restaurante,
+                estado='abierto'
+            )
+        except Pedido.DoesNotExist:
+            return Response(
+                {'error': 'Pedido no encontrado o no está abierto'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Cancelar el pedido
+        pedido.estado = 'cancelado'
+        pedido.save()
+
+        # Liberar la mesa
+        if pedido.mesa:
+            pedido.mesa.estado = 'disponible'
+            pedido.mesa.save()
+
+            # Eliminar comensales de la mesa
+            Comensal.objects.filter(mesa=pedido.mesa).delete()
+
+        return Response(
+            {'mensaje': 'Pedido cancelado exitosamente'},
+            status=status.HTTP_200_OK
+        )
 
 
 class AgregarProductoView(APIView):
@@ -455,13 +526,15 @@ class EnviarCocinaView(APIView):
             detalles = PedidoDetalle.objects.filter(
                 id__in=detalle_ids,
                 pedido=pedido,
-                enviado_cocina=False
+                enviado_cocina=False,
+                cancelado=False
             )
         else:
             # Enviar todos los detalles pendientes
             detalles = PedidoDetalle.objects.filter(
                 pedido=pedido,
-                enviado_cocina=False
+                enviado_cocina=False,
+                cancelado=False
             )
 
         if not detalles.exists():
@@ -528,6 +601,11 @@ class EliminarDetalleView(APIView):
                     {'error': 'No se puede eliminar un producto que ya fue enviado a cocina'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            if detalle.cancelado:
+                return Response(
+                    {'error': 'El producto ya fue cancelado'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Eliminar el detalle
             detalle.delete()
@@ -542,6 +620,58 @@ class EliminarDetalleView(APIView):
         except Exception as e:
             return Response(
                 {'error': f'Error al eliminar detalle del pedido: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class CancelarDetalleView(APIView):
+    """Marca un detalle del pedido como cancelado."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, detalle_id):
+        restaurante = get_restaurante_usuario(request.user)
+        if not restaurante:
+            return Response(
+                {'error': 'Usuario no está asociado a ningún restaurante'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            detalle = PedidoDetalle.objects.select_related('pedido').get(
+                id=detalle_id,
+                pedido__restaurante=restaurante
+            )
+
+            if detalle.cancelado:
+                serializer = PedidoDetalleSerializer(detalle)
+                return Response(
+                    {
+                        'mensaje': 'El producto ya estaba cancelado',
+                        'detalle': serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            detalle.cancelado = True
+            detalle.save(update_fields=['cancelado'])
+
+            serializer = PedidoDetalleSerializer(detalle)
+            return Response(
+                {
+                    'mensaje': 'Producto cancelado exitosamente',
+                    'detalle': serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except PedidoDetalle.DoesNotExist:
+            return Response(
+                {'error': 'Detalle del pedido no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Error al cancelar detalle del pedido: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -590,6 +720,57 @@ class PedidoViewSet(ModelViewSet):
         if not restaurante:
             return Pedido.objects.none()
         return Pedido.objects.filter(restaurante=restaurante).select_related('mesa', 'mesero')
+
+    @action(detail=False, methods=['get'], url_path='cocina')
+    def cocina(self, request):
+        """Lista pedidos abiertos con productos enviados a cocina."""
+        restaurante = get_restaurante_usuario(request.user)
+        if not restaurante:
+            return Response([])
+
+        pedidos = (
+            Pedido.objects.filter(
+                restaurante=restaurante,
+                estado='abierto',
+                items__enviado_cocina=True
+            )
+            .select_related('mesa', 'mesero')
+            .prefetch_related('items__producto', 'items__comensal')
+            .distinct()
+            .order_by('creado')
+        )
+
+        ahora = timezone.now()
+        respuesta = []
+
+        for pedido in pedidos:
+            detalles_qs = pedido.items.filter(enviado_cocina=True, cancelado=False).select_related('producto', 'comensal').order_by('fecha')
+            detalles_data = PedidoDetalleSerializer(detalles_qs, many=True).data
+
+            if not detalles_data:
+                continue
+
+            mesa = pedido.mesa
+            mesero = pedido.mesero
+
+            tiempo_minutos = int(max((ahora - pedido.creado).total_seconds() // 60, 0))
+
+            respuesta.append({
+                'id': pedido.id,
+                'creado': pedido.creado,
+                'tiempo_espera_minutos': tiempo_minutos,
+                'mesa': {
+                    'id': mesa.id,
+                    'nombre': getattr(mesa, 'nombre', None)
+                } if mesa else None,
+                'mesero': {
+                    'id': mesero.id,
+                    'nombre': mesero.get_full_name() or mesero.username
+                } if mesero else None,
+                'detalles': detalles_data
+            })
+
+        return Response(respuesta)
     
     @extend_schema(
         description="Obtiene los detalles (productos) de un pedido específico.",

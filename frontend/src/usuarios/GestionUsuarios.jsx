@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import Swal from 'sweetalert2';
 import api from '../services/api';
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,60 @@ export default function GestionUsuarios() {
     permisos_ids: [],
     activo: true
   });
+  const [restaurante, setRestaurante] = useState(null);
+  const [emailLocalPart, setEmailLocalPart] = useState('');
   const { tienePermiso, userRol } = usePOS();
+
+  const domainSuffix = useMemo(() => {
+    if (!restaurante?.slug) {
+      return '';
+    }
+    return `@${restaurante.slug}.com`;
+  }, [restaurante]);
+
+  const sanitizeLocalPart = useCallback((value) => {
+    return (value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9._-]/g, '');
+  }, []);
+
+  const handleEmailLocalChange = useCallback((value) => {
+    setEmailLocalPart(sanitizeLocalPart(value));
+  }, [sanitizeLocalPart]);
+
+  const extractLocalPart = useCallback((email) => {
+    if (!email) {
+      return '';
+    }
+
+    const lowered = email.toLowerCase();
+
+    if (domainSuffix && lowered.endsWith(domainSuffix.toLowerCase())) {
+      return sanitizeLocalPart(email.slice(0, -domainSuffix.length));
+    }
+
+    const [local] = email.split('@');
+    return sanitizeLocalPart(local);
+  }, [domainSuffix, sanitizeLocalPart]);
+
+  useEffect(() => {
+    setUsuarioForm((prev) => {
+      const desiredEmail = emailLocalPart
+        ? `${emailLocalPart}${domainSuffix || ''}`
+        : '';
+
+      if (prev.email === desiredEmail) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        email: desiredEmail,
+      };
+    });
+  }, [emailLocalPart, domainSuffix]);
 
 
   const cargarUsuarios = async () => {
@@ -44,10 +97,21 @@ export default function GestionUsuarios() {
     }
   };
 
+  const cargarRestaurante = useCallback(async () => {
+    try {
+      const res = await api.get('/restaurantes/mi-restaurante/');
+      setRestaurante(res.data || null);
+    } catch (error) {
+      console.error('Error cargando restaurante:', error);
+      setRestaurante(null);
+    }
+  }, []);
+
   useEffect(() => {
     cargarUsuarios();
     cargarPermisos();
-  }, []);
+    cargarRestaurante();
+  }, [cargarRestaurante]);
 
   const cargarPermisos = async () => {
     try {
@@ -62,9 +126,44 @@ export default function GestionUsuarios() {
   const guardarUsuario = async (e) => {
     e.preventDefault();
     try {
+      if (!domainSuffix) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Configura el restaurante',
+          text: 'Define el slug del restaurante antes de crear usuarios.',
+          confirmButtonColor: '#f97316'
+        });
+        return;
+      }
+
+      const sanitizedLocal = sanitizeLocalPart(emailLocalPart);
+
+      if (!sanitizedLocal) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Usuario requerido',
+          text: 'Ingresa un identificador para el correo del usuario.',
+          confirmButtonColor: '#f97316'
+        });
+        return;
+      }
+
+      const emailFinal = `${sanitizedLocal}${domainSuffix}`;
+      setEmailLocalPart(sanitizedLocal);
+
+      setUsuarioForm((prev) => ({
+        ...prev,
+        email: emailFinal
+      }));
+
+      const basePayload = {
+        ...usuarioForm,
+        email: emailFinal
+      };
+
       if (editando) {
         // Editar usuario existente
-        const dataToUpdate = { ...usuarioForm };
+        const dataToUpdate = { ...basePayload };
         // No enviar password si está vacío
         if (!dataToUpdate.password) {
           delete dataToUpdate.password;
@@ -72,7 +171,7 @@ export default function GestionUsuarios() {
         await api.put(`/restaurantes/usuarios/${editando}/`, dataToUpdate);
       } else {
         // Crear nuevo usuario
-        await api.post('/restaurantes/usuarios/', usuarioForm);
+        await api.post('/restaurantes/usuarios/', basePayload);
       }
       
       setDialogOpen(false);
@@ -152,6 +251,7 @@ export default function GestionUsuarios() {
       permisos_ids: usuario.permisos_detalle?.map(p => p.id) || [],
       activo: usuario.activo !== undefined ? usuario.activo : true
     });
+    setEmailLocalPart(extractLocalPart(usuario.email));
     setDialogOpen(true);
   };
 
@@ -165,6 +265,7 @@ export default function GestionUsuarios() {
       permisos_ids: [],
       activo: true
     });
+    setEmailLocalPart('');
     setEditando(null);
   };
 
@@ -372,14 +473,27 @@ export default function GestionUsuarios() {
           </DialogHeader>
           <form onSubmit={guardarUsuario} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Email *</label>
-              <Input
-                type="email"
-                placeholder="usuario@ejemplo.com"
-                value={usuarioForm.email}
-                onChange={(e) => setUsuarioForm({ ...usuarioForm, email: e.target.value })}
-                required
-              />
+              <label className="block text-sm font-medium mb-2">Usuario (correo) *</label>
+              <div className="flex items-center">
+                <Input
+                  type="text"
+                  placeholder="usuario"
+                  value={emailLocalPart}
+                  onChange={(e) => handleEmailLocalChange(e.target.value)}
+                  required
+                  className={`flex-1 ${domainSuffix ? 'rounded-r-none' : ''}`}
+                  pattern="^[a-z0-9._-]+$"
+                  title="Solo letras minúsculas, números, puntos, guiones y guiones bajos"
+                />
+                <span className="px-3 py-2 border border-l-0 border-gray-300 rounded-r-md bg-gray-100 text-sm text-gray-600">
+                  {domainSuffix || '@' + (restaurante?.slug || 'restaurante') + '.com'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {domainSuffix
+                  ? `El correo final será ${emailLocalPart || 'usuario'}${domainSuffix}`
+                  : 'Define el slug del restaurante para generar correos automáticamente.'}
+              </p>
             </div>
             
             <div className="grid grid-cols-2 gap-4">

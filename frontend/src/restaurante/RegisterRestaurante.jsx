@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from '../services/api';
 import { useNavigate } from "react-router-dom";
 import {
@@ -18,7 +18,37 @@ export default function RegisterRestaurante() {
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
+    const [slugTouched, setSlugTouched] = useState(false);
     const navigate = useNavigate();
+
+    const createSlug = useCallback((value) => {
+        return (value || '')
+            .toString()
+            .normalize('NFD')
+            .replace(/[^\w\s-]/g, '')
+            .trim()
+            .replace(/[\s_-]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .toLowerCase();
+    }, []);
+
+    const handleNombreChange = (value) => {
+        setData((prev) => {
+            const next = { ...prev, nombre: value };
+            if (!slugTouched) {
+                next.slug = createSlug(value);
+            }
+            return next;
+        });
+    };
+
+    const handleSlugChange = (value) => {
+        setSlugTouched(true);
+        setData((prev) => ({
+            ...prev,
+            slug: createSlug(value)
+        }));
+    };
 
     useEffect(() => {
         //Verificar si el restaurante ya está registrado
@@ -27,6 +57,9 @@ export default function RegisterRestaurante() {
                 const response = await api.get('/restaurantes/mi-restaurante/');
                 if (response.data) {
                     setData(response.data); 
+                    if (response.data?.slug) {
+                        setSlugTouched(true);
+                    }
                     
                 }
             } catch (error) {
@@ -98,8 +131,26 @@ export default function RegisterRestaurante() {
                                             placeholder="Ej: La Casa del Sabor"
                                             value = {data.nombre || ''}
                                             required
-                                            onChange={e => setData({ ...data, nombre: e.target.value })} 
+                                            onChange={e => handleNombreChange(e.target.value)} 
                                         />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                                            <i className="fas fa-link mr-2"></i>
+                                            Slug (URL) *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            placeholder="ejemplo  lacasadelsabor, tacos-pizza, restaurante_123"
+                                            value={data.slug || ''}
+                                            required
+                                            pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                                            title="Usa solo letras minúsculas, números y guiones"
+                                            onChange={(e) => handleSlugChange(e.target.value)}
+                                        />
+                                        <small className="text-gray-500">Este identificador se usara para registrar usuarios del Restaurante</small>
                                     </div>
                                     
                                     <div>

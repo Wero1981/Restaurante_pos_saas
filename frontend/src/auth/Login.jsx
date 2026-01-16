@@ -47,8 +47,11 @@ export default function Login() {
                 case 'cocinero':
                     navigate('/ordenes');
                     break;
+                case 'cajero':
+                    navigate('/caja');
+                    break;
                 default:
-                    navigate('/login');
+                    navigate('/sin-permiso');
             }
         } catch (error) {
             console.error("Login failed:", error);

@@ -1,3 +1,6 @@
+import re
+import unicodedata
+
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -9,6 +12,33 @@ from .models import Restaurante, UsuarioRestaurante, Permiso
 from .serializer import RestauranteSerializer, UsuarioRestauranteSerializer, PermisoSerializer
 from usuarios.models import Usuario
 from core.permissions import TienePermisoRestaurante
+
+
+def format_restaurant_email(restaurante, value):
+    """Normaliza el correo del usuario usando el slug del restaurante."""
+    if not value:
+        return ''
+
+    raw_value = (value or '').strip().lower()
+    local_part = raw_value
+    domain_part = ''
+
+    if '@' in raw_value:
+        local_part, _, domain_part = raw_value.partition('@')
+
+    normalized_local = unicodedata.normalize('NFD', local_part)
+    normalized_local = normalized_local.encode('ascii', 'ignore').decode('ascii')
+    normalized_local = re.sub(r'[^a-z0-9._-]', '', normalized_local)
+
+    if restaurante and restaurante.slug:
+        domain_part = f'{restaurante.slug}.com'
+    elif not domain_part:
+        domain_part = ''
+
+    if not normalized_local or not domain_part:
+        return ''
+
+    return f'{normalized_local}@{domain_part}'
 
 @extend_schema_view(
     retrieve=extend_schema(
@@ -187,9 +217,16 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
         
         try:
             with transaction.atomic():
+                email_normalizado = format_restaurant_email(restaurante, request.data.get('email'))
+                if not email_normalizado:
+                    return Response(
+                        {'email': ['No se pudo generar un correo válido. Verifica el slug del restaurante y el identificador.']},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
                 # Crear el usuario
                 usuario_data = {
-                    'email': request.data.get('email'),
+                    'email': email_normalizado,
                     'password': request.data.get('password'),
                     'nombre': request.data.get('nombre', ''),
                     'apellidoP': request.data.get('apellido', ''),
@@ -237,13 +274,19 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
                 usuario = instance.usuario
                 
                 if 'email' in request.data:
+                    email_normalizado = format_restaurant_email(instance.restaurante, request.data.get('email'))
+                    if not email_normalizado:
+                        return Response(
+                            {'email': ['No se pudo generar un correo válido. Verifica el slug del restaurante y el identificador.']},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
                     # Verificar que el email no esté en uso por otro usuario
-                    if Usuario.objects.filter(email=request.data['email']).exclude(id=usuario.id).exists():
+                    if Usuario.objects.filter(email=email_normalizado).exclude(id=usuario.id).exists():
                         return Response(
                             {'email': ['Este email ya está registrado']},
                             status=status.HTTP_400_BAD_REQUEST
                         )
-                    usuario.email = request.data['email']
+                    usuario.email = email_normalizado
                 
                 if 'nombre' in request.data:
                     usuario.nombre = request.data['nombre']

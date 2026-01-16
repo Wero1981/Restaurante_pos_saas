@@ -25,7 +25,7 @@ import { ChevronRight,
   UtensilsCrossed
      } from "lucide-react";
 import ProductoCard from '../productos/producto';
-import PlateIcon from '../icons/Comensal.jsx';
+import CancelarPedido from '../icons/CancelarPedido';
 
 
 export default function Pedido() {
@@ -142,7 +142,46 @@ export default function Pedido() {
     productos.some(p => p.categoria === categoriaActual.id)
   );
 
-  const handleResetCategorias = () => {
+
+  /*---------------------- HANDLES----------------------- */
+  const handleCancelarPedido = async () => {
+    try {
+      const result = await api.post(`/pedidos/cancelar/`, {
+        pedido_id: pedidoActivo.id
+      });
+      if (result.status === 200) {
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          text: 'Pedido cancelado correctamente',
+          showConfirmButton: false,
+          timer: 2000,
+        });
+        resetearPOS();
+        navigate('/mesas');
+      }
+      else {
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          text: 'No se pudo cancelar el pedido',
+          icon: 'error',
+          showConfirmButton: false,
+          timer: 2000,
+        });
+      }
+
+    } catch (error) {
+      console.error('Error cancelando pedido:', error);
+      }
+  }
+
+
+
+
+
+    const handleResetCategorias = () => {
     setCategoriaSeleccionada(null);
     setBusqueda('');
   };
@@ -256,6 +295,19 @@ export default function Pedido() {
       return;
     }
 
+    if (detalle.cancelado) {
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
+        title: 'El producto ya está cancelado',
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true
+      });
+      return;
+    }
+
     try {
       const res = await api.delete(`/pedidos/detalle/${detalle.id}/`);
       if (res.status === 204) {
@@ -361,6 +413,69 @@ export default function Pedido() {
     return acc;
   }, {});
 
+  const quitarComensalPedido = async (comensalId) => {
+    if (comensalId === 'sin-asignar') {
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
+        title: 'Asigna un comensal antes de quitarlo',
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true
+      });
+      return;
+    }
+
+    const grupo = detallesPorComensal[comensalId];
+    const nombre = grupo?.comensal?.nombre || 'este comensal';
+    const productosAsociados = grupo?.items?.length || 0;
+    const productosEnCocina = grupo?.items?.some(item => item.enviado_cocina) || false;
+
+    const numericId = Number(comensalId);
+    if (Number.isNaN(numericId)) {
+      console.error('ID de comensal inválido:', comensalId);
+      return;
+    }
+
+    try {
+      await api.delete(`/comensales/${numericId}/`);
+
+      setComensales((prev) => prev.filter((comensal) => comensal.id !== numericId));
+
+      if (comensalSeleccionado?.id === numericId) {
+        seleccionarComensal(null);
+      }
+
+      await cargarDetallesPedido();
+      await cargarComensales();
+
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: productosAsociados
+          ? `${nombre} eliminado${productosEnCocina ? ' (había productos en cocina)' : ''}`
+          : `${nombre} eliminado`,
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true
+      });
+    } catch (error) {
+      console.error('Error eliminando comensal:', error);
+      const mensaje = error.response?.data?.error || 'No se pudo eliminar el comensal';
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'error',
+        title: mensaje,
+        showConfirmButton: false,
+        timer: 2500,
+        timerProgressBar: true
+      });
+    }
+  };
+
   // Función para obtener color de fondo para productos duplicados
   const obtenerColorProducto = (items, detalleId, productoId) => {
     // Encontrar todos los detalles del mismo producto
@@ -383,7 +498,12 @@ export default function Pedido() {
   };
 
   const calcularTotalPedido = () => {
-    return detallesPedido.reduce((sum, detalle) => sum + parseFloat(detalle.subtotal || 0), 0);
+    return detallesPedido.reduce((sum, detalle) => {
+      if (detalle.cancelado) {
+        return sum;
+      }
+      return sum + parseFloat(detalle.subtotal || 0);
+    }, 0);
   };
 
   const volverAMesas = () => {
@@ -523,8 +643,8 @@ export default function Pedido() {
                 </div>
               )}
 
-              <div className="mb-4 flex">
-                <div className="relative flex-1">
+              <div className="mb-4 flex gap-2">
+                <div className="relative flex-1 ">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
                     placeholder="Buscar productos..."
@@ -535,13 +655,26 @@ export default function Pedido() {
                 </div>
                 {/* modo rapido */}
                 <Button
-                type="button"
-                variant={modoRapido ? 'default' : 'outline'}
-                onClick={() => setModoRapido(!modoRapido)}
-                className={modoRapido ? 'bg-orange-500 hover:bg-orange-600 text-white' : ''}
-              >
-                {modoRapido ? 'Modo Rápido' : 'Modo Normal'}
-              </Button>
+                  type="button"
+                  variant={modoRapido ? 'default' : 'outline'}
+                  onClick={() => setModoRapido(!modoRapido)}
+                  className={modoRapido ? 'bg-orange-500 hover:bg-orange-600 text-white' : 'bg-white hover:bg-gray-100 text-orange-500'}
+                >
+                  {modoRapido ? 'Modo Rápido' : 'Modo Normal'}
+                </Button>
+
+                {/* Cancelar pedido */}
+                {pedidoActivo && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCancelarPedido}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    <CancelarPedido className="w-5 h-5 mr-2"/>
+                    Pedido
+                  </Button>
+                )}
               </div>
 
               <div className="flex-1 overflow-auto">
@@ -609,23 +742,42 @@ export default function Pedido() {
                 ) : (
                   Object.entries(detallesPorComensal).map(([comensalId, grupo]) => (
                     <div key={comensalId} className="border rounded-lg p-3 bg-gray-50">
-                      <div className="flex items-center gap-2 mb-2 pb-2 border-b">
-                        <Users className="w-4 h-4 text-orange-500" />
-                        <span className="font-semibold text-sm">
-                          {grupo.comensal?.nombre || 'Sin asignar'}
-                        </span>
+                      <div className="flex items-center flex-1 gap-2 mb-2 pb-2 border-b">
+                        <div className='flex items-center gap-2'>
+                          <Users className="w-4 h-4 text-orange-500" />
+                          <span className="font-semibold text-sm">
+                            {grupo.comensal?.nombre || 'Sin asignar'}
+                          </span>
+                        </div>
+
+                        {comensalId !== 'sin-asignar' && (
+                          <button
+                            onClick={() => quitarComensalPedido(comensalId)}
+                            className="ml-auto text-red-600 hover:text-red-800 flex items-center text-xs"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                          </button>
+                        )}
                       </div>
                       <div className="space-y-1">
                         {grupo.items.map(detalle => {
                           const colorFondo = obtenerColorProducto(grupo.items, detalle.id, detalle.producto.id);
+                          const esCancelado = detalle.cancelado;
+                          const detalleClasses = [
+                            'flex justify-between items-start text-xs p-2 rounded',
+                            colorFondo,
+                            esCancelado ? 'opacity-60 bg-red-100' : ''
+                          ].join(' ').trim();
                           return (
                             <div 
                               key={detalle.id} 
-                              className={`flex justify-between items-start text-xs p-2 rounded ${colorFondo}`}
+                              className={detalleClasses}
                             >
                               <div className="flex-1">
-                                <p className="font-medium">{detalle.producto.nombre}</p>
-                                <p className="text-gray-600">
+                                <p className={`font-medium ${esCancelado ? 'line-through text-gray-500' : ''}`}>
+                                  {detalle.producto.nombre}
+                                </p>
+                                <p className={`text-gray-600 ${esCancelado ? 'line-through' : ''}`}>
                                   {detalle.cantidad}x ${parseFloat(detalle.precio_unitario).toFixed(2)}
                                 </p>
                               
@@ -634,22 +786,31 @@ export default function Pedido() {
                                     📝 {detalle.observaciones}
                                   </p>
                                 )}
-                                {detalle.enviado_cocina === true && (
+                                {detalle.enviado_cocina === true && !esCancelado && (
                                   <span className="text-green-600 text-xs">✓ En cocina</span>
                                 )}
+                                {esCancelado && (
+                                  <span className="text-red-600 text-xs font-semibold">✕ Cancelado</span>
+                                )}
                               </div>
-                              <span className="font-semibold">
+                              <span className={`font-semibold ${esCancelado ? 'line-through text-gray-500' : ''}`}>
                                 ${parseFloat(detalle.subtotal).toFixed(2)}
                               </span>
                               <button
                                 onClick={() => removeProductoDelPedido(detalle)}
-                                disabled={detalle.enviado_cocina}
+                                disabled={detalle.enviado_cocina || esCancelado}
                                 className={`ml-2 ${
-                                  detalle.enviado_cocina 
+                                  detalle.enviado_cocina || esCancelado
                                     ? 'text-gray-400 cursor-not-allowed' 
                                     : 'text-red-600 hover:text-red-800'
                                 }`}
-                                title={detalle.enviado_cocina ? 'No se puede eliminar (ya en cocina)' : 'Eliminar producto del pedido'}
+                                title={
+                                  detalle.enviado_cocina
+                                    ? 'No se puede eliminar (ya en cocina)'
+                                    : esCancelado
+                                      ? 'Producto cancelado'
+                                      : 'Eliminar producto del pedido'
+                                }
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -659,7 +820,12 @@ export default function Pedido() {
                       </div>
                       <div className="mt-2 pt-2 border-t flex justify-between text-sm font-semibold">
                         <span>Subtotal:</span>
-                        <span>${grupo.items.reduce((sum, d) => sum + parseFloat(d.subtotal), 0).toFixed(2)}</span>
+                        <span>
+                          ${grupo.items
+                            .filter((d) => !d.cancelado)
+                            .reduce((sum, d) => sum + parseFloat(d.subtotal), 0)
+                            .toFixed(2)}
+                        </span>
                       </div>
                     </div>
                   ))

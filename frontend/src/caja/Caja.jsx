@@ -164,6 +164,26 @@ export default function Caja() {
       setCargandoMesas(false);
     }
   }, [restauranteSeleccionado]);
+  const notificarPedidoPagado = useCallback((pedidoId) => {
+    if (!pedidoId) {
+      return;
+    }
+
+    const payload = JSON.stringify({
+      pedidoId,
+      timestamp: Date.now()
+    });
+
+    try {
+      localStorage.setItem('pedido_pagado', payload);
+    } catch (error) {
+      console.warn('No se pudo almacenar el evento de pago:', error);
+    }
+
+    window.dispatchEvent(new CustomEvent('pedido_pagado', {
+      detail: { pedidoId }
+    }));
+  }, []);
 
   const formatearMonto = (valor) => {
     const numero = Number(valor || 0);
@@ -551,6 +571,7 @@ export default function Caja() {
         };
 
         await api.post('/ventas/', ventaData);
+        notificarPedidoPagado(pedidoMesa?.id);
         
         setDialogPago(false);
         setDialogExito(true);
@@ -614,6 +635,7 @@ export default function Caja() {
       };
 
       await api.post('/ventas/', ventaData);
+      notificarPedidoPagado(pedidoMesa?.id);
       
       // El backend automáticamente cierra el pedido y libera la mesa
       

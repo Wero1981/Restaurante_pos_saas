@@ -7,7 +7,8 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
 	// Ruta manual al contenido de Flowbite React
-    "node_modules/flowbite-react/**/*.{js,jsx,ts,tsx}",
+		"node_modules/flowbite-react/**/*.{js,jsx,ts,tsx}",
+		"./node_modules/flowbite/**/*.js",
   ],
   theme: {
   	container: {

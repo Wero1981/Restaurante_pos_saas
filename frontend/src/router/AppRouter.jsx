@@ -7,6 +7,7 @@ import Productos from '../productos/Productos';
 import Inventario from '../productos/inventario';
 import Mesas from '../mesas/Mesas';
 import Pedido from '../pedido/Pedido';
+import Ordenes from '../ordenes/Ordenes';
 import Caja from '../caja/Caja';
 import GestionUsuarios from '../usuarios/GestionUsuarios';
 import SinPermiso from '../layout/SinPermiso';
@@ -65,6 +66,12 @@ export default function AppRouter() {
           <Route path="/pedido" element={
             <RutaProtegida permiso="crear_pedidos">
               <Pedido />
+            </RutaProtegida>
+          } />
+
+          <Route path="/ordenes" element={
+            <RutaProtegida permisos={['ver_ordenes_cocina', 'ver_pedidos']}>
+              <Ordenes />
             </RutaProtegida>
           } />
           

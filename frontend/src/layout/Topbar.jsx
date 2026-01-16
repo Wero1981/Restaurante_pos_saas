@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { User, Expand, Shrink, LogOut, Crown, Utensils, Wallet, UserCog } from 'lucide-react';
 import { usePOS } from '../context/POSContext';
+import Boss from '@/icons/boss';
+import Mesero from '@/icons/Mesero';
+import Cajero from '@/icons/Cajero';
+
 
 export default function Topbar() {
   const navigate = useNavigate();
@@ -51,13 +55,13 @@ export default function Topbar() {
               <div className="text-left">
                 <div className="font-bold">
                   {userRol === 'admin' && (
-                    <Crown className="inline-block w-4 h-4 text-yellow-500 mr-1" />
+                    <Boss className="inline-block w-5 h-5 mr-1" />
                   )}
                   {userRol === 'mesero' && (
-                    <Utensils className="inline-block w-4 h-4 text-orange-500 mr-1" />
+                    <Mesero className="inline-block w-5 h-5 text-orange-500 mr-1 pb-1" />
                   )}
                   {userRol === 'cajero' && (
-                    <Wallet className="inline-block w-4 h-4 text-green-500 mr-1" />
+                    <Cajero className="inline-block w-8 h-6 text-green-500 mr-1 pb-1" />
                   )}
                   
                   {user?.nombre || 'Usuario'}
