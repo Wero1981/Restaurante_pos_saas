@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "caja",
     "suscripciones",
     "configuraciones",
+    "impresion",
 ]
 
 MIDDLEWARE = [

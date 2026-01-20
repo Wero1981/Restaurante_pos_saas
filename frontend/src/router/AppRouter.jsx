@@ -5,6 +5,7 @@ import RegisterRestaurante from '../restaurante/RegisterRestaurante';
 import ListaRestaurantes from '../restaurante/ListaRestaurantes';
 import Productos from '../productos/Productos';
 import Inventario from '../productos/inventario';
+import MovimientosEntrada from '../productos/MovimientosEntrada';
 import Mesas from '../mesas/Mesas';
 import Pedido from '../pedido/Pedido';
 import Ordenes from '../ordenes/Ordenes';
@@ -54,6 +55,12 @@ export default function AppRouter() {
           <Route path="/inventario" element={
             <RutaProtegida permiso="ver_inventario">
               <Inventario />
+            </RutaProtegida>
+          } />
+
+          <Route path="/inventario/movimientos-entrada" element={
+            <RutaProtegida permiso="editar_inventario">
+              <MovimientosEntrada />
             </RutaProtegida>
           } />
           

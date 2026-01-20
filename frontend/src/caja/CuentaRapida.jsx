@@ -4,11 +4,15 @@ import api from '../services/api';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PanelVentas from '../components/PanelVentas';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   X,
-  CheckCircle
+  CheckCircle,
+  Printer
 } from "lucide-react";
+import { printOrDownloadTicket } from '../lib/printFlow';
+import { formatCurrency } from '../lib/ticketPrinter';
+import { obtenerNombreRestauranteLocal } from '../lib/restaurante';
 
 
 export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
@@ -26,11 +30,74 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
   const [montoPagado, setMontoPagado] = useState('');
   const [procesando, setProcesando] = useState(false);
   const [dialogExito, setDialogExito] = useState(false);
+  const [ultimaVenta, setUltimaVenta] = useState(null);
+  const [impresionEnCurso, setImpresionEnCurso] = useState(false);
+  const restauranteNombre = obtenerNombreRestauranteLocal();
+
+  const ejecutarImpresionTicket = useCallback(async ({ ventaId, ticketData }) => {
+    setImpresionEnCurso(true);
+    try {
+      const resultado = await printOrDownloadTicket({
+        ventaId,
+        ticketData,
+      });
+
+      if (resultado.resultado === 'impreso') {
+        Swal.fire({
+          icon: 'success',
+          title: 'Ticket enviado',
+          text: 'Se envió el ticket a la impresora configurada.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } else {
+        Swal.fire({
+          icon: 'info',
+          title: 'Ticket descargado',
+          text: resultado.mensaje || 'No hay impresora configurada. Se descargó el PDF del ticket.',
+          confirmButtonColor: '#f97316'
+        });
+      }
+    } catch (error) {
+      console.error('Error al intentar imprimir ticket rápido:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'No se pudo imprimir',
+        text: 'Intenta nuevamente o utiliza el PDF descargado.',
+        confirmButtonColor: '#f97316'
+      });
+    } finally {
+      setImpresionEnCurso(false);
+    }
+  }, []);
+
+  const ofrecerImpresionTicket = useCallback(async ({ ventaId, ticketData }) => {
+    const resultado = await Swal.fire({
+      icon: 'question',
+      title: '¿Imprimir ticket ahora?',
+      text: 'Puedes enviarlo a la impresora configurada o descargarlo en PDF.',
+      showCancelButton: true,
+      confirmButtonText: 'Imprimir ticket',
+      cancelButtonText: 'Más tarde',
+      confirmButtonColor: '#f97316',
+      cancelButtonColor: '#6b7280',
+    });
+
+    if (resultado.isConfirmed) {
+      await ejecutarImpresionTicket({ ventaId, ticketData });
+    }
+  }, [ejecutarImpresionTicket]);
 
   useEffect(() => {
     cargarCategorias();
     cargarProductos();
   }, []);
+
+  useEffect(() => {
+    if (!dialogExito) {
+      setUltimaVenta(null);
+    }
+  }, [dialogExito]);
     
     
 
@@ -208,18 +275,48 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
         detalles: detalles
       };
 
-      await api.post('/ventas/', ventaData);
-      
+      const respuesta = await api.post('/ventas/', ventaData);
+      const ventaCreada = respuesta?.data || {};
+
+      const ticketItems = carrito.map((item) => ({
+        nombre: item.nombre,
+        cantidad: item.cantidad,
+        precio_unitario: item.precio,
+        subtotal: item.precio * item.cantidad,
+      }));
+
+      const totalVenta = ventaCreada.total ?? ventaData.total;
+      const ticketPayload = {
+        numeroTicket: ventaCreada.id,
+        fecha: ventaCreada.created_at || new Date().toISOString(),
+        negocio: restauranteNombre,
+        mesa: null,
+        comensal: null,
+        metodoPago: ventaCreada.metodo_pago ?? metodoPago,
+        items: ticketItems,
+        total: totalVenta,
+      };
+
+      setUltimaVenta({
+        id: ventaCreada.id,
+        total: totalVenta,
+        metodo_pago: ventaCreada.metodo_pago ?? metodoPago,
+        fecha: ticketPayload.fecha,
+        ticket: ticketPayload,
+      });
+
       setDialogPago(false);
       setDialogExito(true);
-      
-      setTimeout(() => {
-        setDialogExito(false);
-        setCarrito([]);
-        setMontoPagado('');
-        setMetodoPago('efectivo');
-        if (onVentaExitosa) onVentaExitosa();
-      }, 2000);
+      setCarrito([]);
+      setMontoPagado('');
+      setMetodoPago('efectivo');
+      await ofrecerImpresionTicket({
+        ventaId: ventaCreada.id,
+        ticketData: ticketPayload,
+      });
+      if (onVentaExitosa) {
+        onVentaExitosa();
+      }
 
     } catch (error) {
       console.error('Error procesando venta:', error);
@@ -232,6 +329,22 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
     } finally {
       setProcesando(false);
     }
+  };
+
+  const handleImprimirTicket = async () => {
+    if (!ultimaVenta?.ticket) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Ticket no disponible',
+        text: 'Procesa una venta antes de intentar imprimir.',
+        confirmButtonColor: '#f97316'
+      });
+      return;
+    }
+    await ejecutarImpresionTicket({
+      ventaId: ultimaVenta.id,
+      ticketData: ultimaVenta.ticket,
+    });
   };
 
   return (
@@ -273,6 +386,9 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Procesar Pago</DialogTitle>
+            <DialogDescription>
+              Revisa el monto a cobrar y confirma el método de pago para completar la venta.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {/* Total a pagar */}
@@ -363,14 +479,54 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
       {/* Dialog de Éxito */}
       <Dialog open={dialogExito} onOpenChange={setDialogExito}>
         <DialogContent className="sm:max-w-md">
-          <div className="text-center py-6">
-            <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">
-              ¡Pago Exitoso!
-            </h3>
-            <p className="text-gray-600">
-              La venta se ha procesado correctamente
-            </p>
+          <div className="py-6 space-y-4 text-center">
+            <DialogHeader className="space-y-4 text-center">
+              <CheckCircle className="w-20 h-20 text-green-500 mx-auto" />
+              <div className="space-y-2">
+                <DialogTitle className="text-2xl font-bold text-gray-800">
+                  ¡Pago Exitoso!
+                </DialogTitle>
+                <DialogDescription className="text-base text-gray-600">
+                  La venta se procesó correctamente.
+                </DialogDescription>
+              </div>
+            </DialogHeader>
+
+            {ultimaVenta?.ticket && (
+              <div className="text-sm text-gray-600 space-y-1">
+                <p>
+                  Total cobrado:
+                  <span className="font-semibold text-gray-800 ml-1">
+                    {formatCurrency(ultimaVenta.ticket.total)}
+                  </span>
+                </p>
+                <p>Método de pago: {ultimaVenta.ticket.metodoPago}</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Button
+                className="w-full bg-orange-500 hover:bg-orange-600"
+                onClick={handleImprimirTicket}
+                disabled={impresionEnCurso}
+              >
+                {impresionEnCurso ? (
+                  'Verificando impresora...'
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <Printer className="w-4 h-4" />
+                    Imprimir ticket
+                  </span>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setDialogExito(false)}
+              >
+                Cerrar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

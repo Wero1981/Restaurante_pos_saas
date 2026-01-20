@@ -21,10 +21,10 @@ export const POSProvider = ({ children }) => {
   const [carrito, setCarrito] = useState([]);
   const [showSidebar, setShowSidebar] = useState(true);
 
-
   const cargarUsuarioYPermisos = async () => {
     try {
       const userStr = localStorage.getItem('user');
+      console.log('🔄 Cargando datos del usuario desde localStorage...', userStr);
       
       if (userStr) {
         const userData = JSON.parse(userStr);

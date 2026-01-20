@@ -22,7 +22,7 @@ class RestauranteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Restaurante
         fields = [
-            'id', 'nombre', 'direccion', 'telefono', 'ciudad', 'estado', 'email', 'sitio_web',
+            'id', 'nombre', 'direccion', 'slug', 'telefono', 'ciudad', 'estado', 'email', 'sitio_web',
             'propietario', 'activo', 'created_at', 'configuracion',
             'tipo_moneda', 'descripcion', 'logo'
         ]

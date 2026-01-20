@@ -53,12 +53,15 @@ class PedidoDetalle(models.Model):
     observaciones = models.TextField(blank=True, default='')
     enviado_cocina = models.BooleanField(default=False)
     cancelado = models.BooleanField(default=False)
+    pagado = models.BooleanField(default=False)
+    pagado_en = models.DateTimeField(null=True, blank=True)
+    venta = models.ForeignKey('Venta', related_name='detalles_pedido', null=True, blank=True, on_delete=models.SET_NULL)
     fecha = models.DateTimeField(auto_now_add=True)
 
 
 class Venta(models.Model):
     restaurante = models.ForeignKey(Restaurante, on_delete=models.CASCADE)
-    pedido = models.OneToOneField(Pedido, on_delete=models.CASCADE, null=True, blank=True)
+    pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, null=True, blank=True, related_name='ventas')
     caja = models.ForeignKey('caja.Caja', on_delete=models.SET_NULL, null=True, blank=True, related_name='ventas')
     usuario = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True)
     total = models.DecimalField(max_digits=10, decimal_places=2)

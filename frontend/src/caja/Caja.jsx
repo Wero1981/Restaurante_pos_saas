@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { usePOS } from '../context/POSContext';
@@ -7,7 +7,7 @@ import CuentaRapida from './CuentaRapida';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   CreditCard, 
   DollarSign, 
@@ -22,10 +22,14 @@ import {
   Search,
   ArrowLeftRight,
   CircleDollarSign,
-  PlusCircle, 
   X,
-  Loader2
+  Users,
+  Loader2,
+  Printer
 } from "lucide-react";
+
+import { printOrDownloadTicket } from '../lib/printFlow';
+import { obtenerNombreRestauranteLocal } from '../lib/restaurante';
 
 
 
@@ -51,6 +55,9 @@ export default function Caja() {
   const [metodoPago, setMetodoPago] = useState('efectivo');
   const [dialogPago, setDialogPago] = useState(false);
   const [dialogExito, setDialogExito] = useState(false);
+  const [dialogPagoComensal, setDialogPagoComensal] = useState(false);
+  const [comensalSeleccionadoPago, setComensalSeleccionadoPago] = useState(null);
+  const [pagoPorComensal, setPagoPorComensal] = useState(false);
   const [montoPagado, setMontoPagado] = useState('');
   const [procesando, setProcesando] = useState(false);
   const [dialogCierre, setDialogCierre] = useState(false);
@@ -73,6 +80,74 @@ export default function Caja() {
   const [productos, setProductos] = useState([]);
   const [busquedaProducto, setBusquedaProducto] = useState('');
   const [carritoRapido, setCarritoRapido] = useState([]);
+  const [ultimaVenta, setUltimaVenta] = useState(null);
+  const [impresionEnCurso, setImpresionEnCurso] = useState(false);
+
+  const restauranteActivo = useMemo(() => {
+    if (!restauranteSeleccionado) {
+      return null;
+    }
+    return restaurantes.find((rest) => rest.id === restauranteSeleccionado) || null;
+  }, [restaurantes, restauranteSeleccionado]);
+
+  const nombreRestaurante = useMemo(
+    () => restauranteActivo?.nombre || obtenerNombreRestauranteLocal(),
+    [restauranteActivo]
+  );
+
+  const ejecutarImpresionTicket = useCallback(async ({ ventaId, ticketData }) => {
+    setImpresionEnCurso(true);
+    try {
+      const resultado = await printOrDownloadTicket({
+        ventaId,
+        ticketData,
+      });
+
+      if (resultado.resultado === 'impreso') {
+        Swal.fire({
+          icon: 'success',
+          title: 'Ticket enviado',
+          text: 'Se envió el ticket a la impresora configurada.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } else {
+        Swal.fire({
+          icon: 'info',
+          title: 'Ticket descargado',
+          text: resultado.mensaje || 'No hay impresora configurada. Se descargó el PDF del ticket.',
+          confirmButtonColor: '#f97316'
+        });
+      }
+    } catch (error) {
+      console.error('Error al intentar imprimir el ticket:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'No se pudo imprimir',
+        text: 'Intenta nuevamente o utiliza el PDF descargado.',
+        confirmButtonColor: '#f97316'
+      });
+    } finally {
+      setImpresionEnCurso(false);
+    }
+  }, []);
+
+  const ofrecerImpresionTicket = useCallback(async ({ ventaId, ticketData }) => {
+    const resultado = await Swal.fire({
+      icon: 'question',
+      title: '¿Imprimir ticket ahora?',
+      text: 'Puedes enviarlo a la impresora configurada o descargarlo en PDF.',
+      showCancelButton: true,
+      confirmButtonText: 'Imprimir ticket',
+      cancelButtonText: 'Más tarde',
+      confirmButtonColor: '#f97316',
+      cancelButtonColor: '#6b7280',
+    });
+
+    if (resultado.isConfirmed) {
+      await ejecutarImpresionTicket({ ventaId, ticketData });
+    }
+  }, [ejecutarImpresionTicket]);
 
   //Drawer
   const handleCloseDrawer = () => {
@@ -156,7 +231,7 @@ export default function Caja() {
         };
       });
       
-      console.log('Mesas con cuentas:', mesasConInfo);
+      // console.log('Mesas con cuentas:', mesasConInfo);
       setMesasConCuentas(mesasConInfo);
     } catch (error) {
       console.error('Error cargando mesas con cuentas:', error);
@@ -185,6 +260,142 @@ export default function Caja() {
     }));
   }, []);
 
+  const comensalesResumen = useMemo(() => {
+    if (!pedidoMesa) {
+      return [];
+    }
+
+    const mapKey = (id) => (id !== null && id !== undefined ? `com-${id}` : 'sin-asignar');
+    const resumen = new Map();
+
+    (pedidoMesa.comensales || []).forEach((com) => {
+      const key = mapKey(com?.id);
+      resumen.set(key, {
+        id: com?.id ?? null,
+        nombre: com?.nombre || (com?.id ? `Comensal ${com.id}` : 'Comensal'),
+        total: 0,
+        items: 0
+      });
+    });
+
+    (pedidoMesa.detalles || []).forEach((detalle) => {
+      if (detalle.cancelado) {
+        return;
+      }
+
+      const key = mapKey(detalle.comensal?.id);
+      if (!resumen.has(key)) {
+        resumen.set(key, {
+          id: detalle.comensal?.id ?? null,
+          nombre: detalle.comensal?.nombre || 'Sin asignar',
+          total: 0,
+          items: 0
+        });
+      }
+
+      const entry = resumen.get(key);
+      const subtotal = Number.parseFloat(
+        detalle.subtotal ?? (detalle.producto?.precio || 0) * Number.parseFloat(detalle.cantidad || 0)
+      );
+      const cantidad = Number.parseFloat(detalle.cantidad);
+
+      entry.total += Number.isFinite(subtotal) ? subtotal : 0;
+      entry.items += Number.isFinite(cantidad) ? cantidad : 0;
+    });
+
+    return Array.from(resumen.values())
+      .filter((item) => item.total > 0)
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+  }, [pedidoMesa]);
+
+  const calcularTotalComensal = useCallback((comensalId) => {
+    if (!pedidoMesa || !pedidoMesa.detalles) {
+      return 0;
+    }
+
+    const objetivo = comensalId ?? null;
+    return pedidoMesa.detalles
+      .filter((detalle) => {
+        if (detalle.cancelado) {
+          return false;
+        }
+        const idDetalle = detalle.comensal?.id ?? null;
+        return idDetalle === objetivo;
+      })
+      .reduce((acc, detalle) => {
+        const subtotal = Number.parseFloat(
+          detalle.subtotal ?? (detalle.producto?.precio || 0) * Number.parseFloat(detalle.cantidad || 0)
+        );
+        return acc + (Number.isFinite(subtotal) ? subtotal : 0);
+      }, 0);
+  }, [pedidoMesa]);
+
+  const obtenerDetallesComensal = useCallback((comensalId) => {
+    if (!pedidoMesa || !pedidoMesa.detalles) {
+      return [];
+    }
+
+    const objetivo = comensalId ?? null;
+    return pedidoMesa.detalles.filter((detalle) => {
+      if (detalle.cancelado) {
+        return false;
+      }
+      const idDetalle = detalle.comensal?.id ?? null;
+      return idDetalle === objetivo;
+    });
+  }, [pedidoMesa]);
+
+  const obtenerTotalPago = () => {
+    if (modoCuentaRapida) {
+      return calcularTotalRapido();
+    }
+
+    if (pagoPorComensal && comensalSeleccionadoPago) {
+      return calcularTotalComensal(comensalSeleccionadoPago.id ?? null);
+    }
+
+    if (!pedidoMesa) {
+      return 0;
+    }
+
+    if (typeof pedidoMesa.total === 'number') {
+      return pedidoMesa.total;
+    }
+
+    return (pedidoMesa.detalles || [])
+      .filter((detalle) => !detalle.cancelado)
+      .reduce((acc, detalle) => {
+        const subtotal = Number.parseFloat(
+          detalle.subtotal ?? (detalle.producto?.precio || 0) * Number.parseFloat(detalle.cantidad || 0)
+        );
+        return acc + (Number.isFinite(subtotal) ? subtotal : 0);
+      }, 0);
+  };
+
+  const obtenerDetallesParaPago = () => {
+    if (modoCuentaRapida) {
+      return carritoRapido.map((item) => ({
+        producto: item.id,
+        cantidad: item.cantidad,
+        precio_unitario: item.precio
+      }));
+    }
+
+    if (!pedidoMesa || !pedidoMesa.detalles) {
+      return [];
+    }
+
+    const fuente = pagoPorComensal && comensalSeleccionadoPago
+      ? obtenerDetallesComensal(comensalSeleccionadoPago.id ?? null)
+      : pedidoMesa.detalles.filter((detalle) => !detalle.cancelado);
+
+    return fuente.map((item) => ({
+      producto: item.producto.id,
+      cantidad: item.cantidad,
+      precio_unitario: item.producto.precio
+    }));
+  };
+
   const formatearMonto = (valor) => {
     const numero = Number(valor || 0);
     return new Intl.NumberFormat('es-MX', {
@@ -212,6 +423,13 @@ export default function Caja() {
       cargarProductos();
     }
   }, [cajaAbierta, restauranteSeleccionado, cargarMesasConCuentas, cargarProductos]);
+
+  useEffect(() => {
+    if (!dialogExito) {
+      setUltimaVenta(null);
+      setImpresionEnCurso(false);
+    }
+  }, [dialogExito]);
 
   const seleccionarMesa = async (mesa) => {
     try {
@@ -528,13 +746,12 @@ export default function Caja() {
 
 
   const calcularCambio = () => {
-    const pago = parseFloat(montoPagado) || 0;
-    const totalPedido = modoCuentaRapida ? calcularTotalRapido() : (pedidoMesa?.total || 0);
+    const pago = Number.parseFloat(montoPagado) || 0;
+    const totalPedido = obtenerTotalPago();
     return pago - totalPedido;
   };
 
   const procesarVenta = async () => {
-    // Validación para cuenta rápida
     if (modoCuentaRapida) {
       if (carritoRapido.length === 0) {
         Swal.fire({
@@ -545,7 +762,7 @@ export default function Caja() {
         });
         return;
       }
-      
+
       if (metodoPago === 'efectivo' && calcularCambio() < 0) {
         Swal.fire({
           icon: 'warning',
@@ -555,34 +772,56 @@ export default function Caja() {
         });
         return;
       }
-      
+
       setProcesando(true);
       try {
-        const detalles = carritoRapido.map(item => ({
-          producto: item.id,
-          cantidad: item.cantidad,
-          precio_unitario: item.precio
-        }));
-
+        const detallesVenta = obtenerDetallesParaPago();
+        const totalVenta = obtenerTotalPago();
         const ventaData = {
-          total: calcularTotalRapido(),
+          total: totalVenta,
           metodo_pago: metodoPago,
-          detalles: detalles
+          detalles: detallesVenta
         };
 
-        await api.post('/ventas/', ventaData);
+        const respuesta = await api.post('/ventas/', ventaData);
+        const ventaCreada = respuesta?.data || {};
         notificarPedidoPagado(pedidoMesa?.id);
-        
+
+        const ticketItems = carritoRapido.map((item) => ({
+          nombre: item.nombre,
+          cantidad: item.cantidad,
+          precio_unitario: item.precio,
+          subtotal: item.precio * item.cantidad,
+        }));
+
+        const ticketPayload = {
+          numeroTicket: ventaCreada.id,
+          fecha: ventaCreada.created_at || new Date().toISOString(),
+          negocio: nombreRestaurante,
+          mesa: null,
+          comensal: null,
+          metodoPago: ventaCreada.metodo_pago ?? metodoPago,
+          items: ticketItems,
+          total: ventaCreada.total ?? totalVenta,
+        };
+
+        setUltimaVenta({
+          id: ventaCreada.id,
+          total: ticketPayload.total,
+          metodo_pago: ticketPayload.metodoPago,
+          fecha: ticketPayload.fecha,
+          ticket: ticketPayload,
+        });
+
         setDialogPago(false);
         setDialogExito(true);
-        
-        setTimeout(() => {
-          setDialogExito(false);
-          cancelarCuentaRapida();
-          setMontoPagado('');
-          setMetodoPago('efectivo');
-        }, 2000);
-
+        cancelarCuentaRapida();
+        setMontoPagado('');
+        setMetodoPago('efectivo');
+        await ofrecerImpresionTicket({
+          ventaId: ventaCreada.id,
+          ticketData: ticketPayload,
+        });
       } catch (error) {
         console.error('Error procesando venta:', error);
         const mensaje = error.response?.data?.non_field_errors?.[0] || error.response?.data?.detail || 'Error al procesar la venta';
@@ -597,13 +836,34 @@ export default function Caja() {
       }
       return;
     }
-    
-    // Validación para pedido de mesa
+
     if (!pedidoMesa || !pedidoMesa.detalles || pedidoMesa.detalles.length === 0) {
       Swal.fire({
         icon: 'warning',
         title: 'Sin productos',
         text: 'Esta mesa no tiene productos en su pedido',
+        confirmButtonColor: '#f97316'
+      });
+      return;
+    }
+
+    if (pagoPorComensal && !comensalSeleccionadoPago) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Selecciona un comensal',
+        text: 'Elige el comensal antes de continuar con el cobro.',
+        confirmButtonColor: '#f97316'
+      });
+      return;
+    }
+
+    const detalles = obtenerDetallesParaPago();
+
+    if (detalles.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Sin productos asignados',
+        text: 'El comensal seleccionado no tiene productos pendientes.',
         confirmButtonColor: '#f97316'
       });
       return;
@@ -619,39 +879,137 @@ export default function Caja() {
       return;
     }
 
+    const totalVenta = obtenerTotalPago();
+    const comensalEnPago = comensalSeleccionadoPago;
+    const mesaIdSeleccionada = mesaSeleccionadaLocal?.id;
+    const mesaNombre = mesaSeleccionadaLocal?.nombre || mesaSeleccionadaLocal?.numero || (mesaSeleccionadaLocal ? `Mesa ${mesaSeleccionadaLocal.id}` : null);
+
+    const detallesFuente = pagoPorComensal && comensalSeleccionadoPago
+      ? obtenerDetallesComensal(comensalSeleccionadoPago.id ?? null)
+      : (pedidoMesa.detalles || []).filter((detalle) => !detalle.cancelado);
+
     setProcesando(true);
     try {
-      const detalles = pedidoMesa.detalles.map(item => ({
-        producto: item.producto.id,
-        cantidad: item.cantidad,
-        precio_unitario: item.producto.precio
-      }));
-
       const ventaData = {
-        total: pedidoMesa.total,
+        total: totalVenta,
         metodo_pago: metodoPago,
-        detalles: detalles,
-        pedido: pedidoMesa.id
+        detalles
       };
 
-      await api.post('/ventas/', ventaData);
+      if (!pagoPorComensal) {
+        ventaData.pedido = pedidoMesa.id;
+      }
+
+      const respuesta = await api.post('/ventas/', ventaData);
+      const ventaCreada = respuesta?.data || {};
       notificarPedidoPagado(pedidoMesa?.id);
-      
-      // El backend automáticamente cierra el pedido y libera la mesa
-      
+
+      const ticketItems = detallesFuente.map((detalle) => {
+        const cantidad = Number.parseFloat(detalle.cantidad);
+        const precioUnitario = Number.parseFloat(
+          detalle.precio_unitario ?? detalle.producto?.precio ?? 0
+        );
+        const subtotalCalculado = Number.parseFloat(
+          detalle.subtotal ?? cantidad * precioUnitario
+        );
+        const subtotalFinal = Number.isFinite(subtotalCalculado)
+          ? subtotalCalculado
+          : cantidad * precioUnitario;
+
+        return {
+          nombre: detalle.producto?.nombre || 'Producto',
+          cantidad: Number.isFinite(cantidad) ? cantidad : 0,
+          precio_unitario: Number.isFinite(precioUnitario) ? precioUnitario : 0,
+          subtotal: subtotalFinal,
+        };
+      });
+
+      const ticketPayload = {
+        numeroTicket: ventaCreada.id,
+        fecha: ventaCreada.created_at || new Date().toISOString(),
+        negocio: nombreRestaurante,
+        mesa: mesaNombre,
+        comensal: comensalEnPago?.nombre || null,
+        metodoPago: ventaCreada.metodo_pago ?? metodoPago,
+        items: ticketItems,
+        total: ventaCreada.total ?? totalVenta,
+      };
+
+      setUltimaVenta({
+        id: ventaCreada.id,
+        total: ticketPayload.total,
+        metodo_pago: ticketPayload.metodoPago,
+        fecha: ticketPayload.fecha,
+        ticket: ticketPayload,
+      });
+
       setDialogPago(false);
       setDialogExito(true);
-      
-      // Limpiar después de 2 segundos y recargar mesas
-      setTimeout(() => {
-        setDialogExito(false);
+      setMontoPagado('');
+      setMetodoPago('efectivo');
+
+      if (comensalEnPago) {
+        const comensalId = comensalEnPago.id ?? null;
+
+        const actualizarPedidoTrasPago = (pedido) => {
+          if (!pedido) {
+            return pedido;
+          }
+
+          const detallesRestantes = (pedido.detalles || []).filter((detalle) => {
+            const idDetalle = detalle.comensal?.id ?? null;
+            return idDetalle !== comensalId;
+          });
+
+          const totalRestante = detallesRestantes
+            .filter((detalle) => !detalle.cancelado)
+            .reduce((acc, detalle) => {
+              const subtotal = Number.parseFloat(
+                detalle.subtotal ?? (detalle.producto?.precio || 0) * Number.parseFloat(detalle.cantidad || 0)
+              );
+              return acc + (Number.isFinite(subtotal) ? subtotal : 0);
+            }, 0);
+
+          return {
+            ...pedido,
+            detalles: detallesRestantes,
+            total: totalRestante
+          };
+        };
+
+        setPedidoMesa((prev) => actualizarPedidoTrasPago(prev));
+        setMesaSeleccionadaLocal((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          return {
+            ...prev,
+            pedido: actualizarPedidoTrasPago(prev.pedido)
+          };
+        });
+        setMesasConCuentas((prev) => prev.map((mesa) => {
+          if (mesa.id !== mesaIdSeleccionada) {
+            return mesa;
+          }
+          return {
+            ...mesa,
+            pedido: actualizarPedidoTrasPago(mesa.pedido)
+          };
+        }));
+
+      } else {
         setMesaSeleccionadaLocal(null);
         setPedidoMesa(null);
-        setMontoPagado('');
-        setMetodoPago('efectivo');
         cargarMesasConCuentas();
-      }, 2000);
+      }
 
+      setPagoPorComensal(false);
+      setComensalSeleccionadoPago(null);
+
+      await ofrecerImpresionTicket({
+        ventaId: ventaCreada.id,
+        ticketData: ticketPayload,
+      });
     } catch (error) {
       console.error('Error procesando venta:', error);
       const mensaje = error.response?.data?.non_field_errors?.[0] || error.response?.data?.detail || 'Error al procesar la venta';
@@ -666,6 +1024,81 @@ export default function Caja() {
     }
   };
 
+  const handleImprimirTicket = async () => {
+    if (!ultimaVenta?.ticket) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Ticket no disponible',
+        text: 'Realiza un cobro para generar un ticket antes de imprimir.',
+        confirmButtonColor: '#f97316'
+      });
+      return;
+    }
+    await ejecutarImpresionTicket({
+      ventaId: ultimaVenta.id,
+      ticketData: ultimaVenta.ticket,
+    });
+  };
+
+  const abrirDialogPagoComensal = () => {
+    if (modoCuentaRapida) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Modo no disponible',
+        text: 'El pago por comensal solo está disponible para cuentas de mesa.',
+        confirmButtonColor: '#f97316'
+      });
+      return;
+    }
+
+    if (!mesaSeleccionadaLocal || !pedidoMesa || !pedidoMesa.detalles || pedidoMesa.detalles.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Sin productos',
+        text: 'Selecciona una mesa con productos para dividir el cobro por comensal.',
+        confirmButtonColor: '#f97316'
+      });
+      return;
+    }
+
+    if (comensalesResumen.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Sin comensales',
+        text: 'Agrega comensales al pedido desde la vista de pedidos antes de cobrar.',
+        confirmButtonColor: '#f97316'
+      });
+      return;
+    }
+
+    setDialogPagoComensal(true);
+  };
+
+  const iniciarPagoComensal = (comensal) => {
+    if (!comensal) {
+      return;
+    }
+
+    const total = calcularTotalComensal(comensal.id ?? null);
+
+    if (total <= 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Sin monto pendiente',
+        text: 'El comensal seleccionado no tiene monto pendiente por cobrar.',
+        confirmButtonColor: '#f97316'
+      });
+      return;
+    }
+
+    setComensalSeleccionadoPago(comensal);
+    setPagoPorComensal(true);
+    setDialogPagoComensal(false);
+    setMontoPagado(total.toFixed(2));
+    setMetodoPago('efectivo');
+    setDialogPago(true);
+  };
+
   const abrirDialogPago = () => {
     if (modoCuentaRapida) {
       if (carritoRapido.length === 0) {
@@ -677,6 +1110,8 @@ export default function Caja() {
         });
         return;
       }
+      setPagoPorComensal(false);
+      setComensalSeleccionadoPago(null);
       setMontoPagado(calcularTotalRapido().toFixed(2));
       setDialogPago(true);
       return;
@@ -691,7 +1126,10 @@ export default function Caja() {
       });
       return;
     }
-    setMontoPagado(pedidoMesa.total.toFixed(2));
+    const total = obtenerTotalPago();
+    setPagoPorComensal(false);
+    setComensalSeleccionadoPago(null);
+    setMontoPagado(total.toFixed(2));
     setDialogPago(true);
   };
 
@@ -764,6 +1202,9 @@ export default function Caja() {
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Abrir Caja</DialogTitle>
+              <DialogDescription>
+                Registra el monto inicial disponible antes de comenzar las ventas.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -1391,6 +1832,22 @@ export default function Caja() {
               <DollarSign className="w-5 h-5 mr-2" />
               Procesar Pago
             </Button>
+
+            <Button
+              variant="outline"
+              className="w-full border-dashed"
+              onClick={abrirDialogPagoComensal}
+              disabled={
+                modoCuentaRapida ||
+                !mesaSeleccionadaLocal ||
+                !pedidoMesa ||
+                !(pedidoMesa.detalles || []).some((detalle) => !detalle.cancelado) ||
+                comensalesResumen.length === 0
+              }
+            >
+              <Users className="w-4 h-4 mr-2" />
+              Pago por Comensal
+            </Button>
             
             <Button
               variant="outline"
@@ -1426,6 +1883,9 @@ export default function Caja() {
         <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Resumen de cierre de caja</DialogTitle>
+            <DialogDescription>
+              Verifica los totales registrados antes de completar el cierre de la jornada.
+            </DialogDescription>
           </DialogHeader>
 
           {cargandoResumen ? (
@@ -1587,19 +2047,84 @@ export default function Caja() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={dialogPago} onOpenChange={setDialogPago}>
+      <Dialog open={dialogPagoComensal} onOpenChange={setDialogPagoComensal}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Selecciona un comensal</DialogTitle>
+            <DialogDescription>
+              Elige a la persona que pagará su consumo para generar el ticket correspondiente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {comensalesResumen.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No hay comensales con consumos pendientes en esta mesa.
+              </p>
+            ) : (
+              comensalesResumen.map((comensal) => (
+                <div
+                  key={comensal.id ?? 'sin-asignar'}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 p-4"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-800 flex items-center gap-2">
+                      <Users className="w-4 h-4 text-orange-500" />
+                      {comensal.nombre}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {comensal.items} {comensal.items === 1 ? 'ítem' : 'ítems'} pendientes
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-orange-600 text-lg">
+                      {formatearMonto(comensal.total)}
+                    </span>
+                    <Button size="sm" onClick={() => iniciarPagoComensal(comensal)}>
+                      Cobrar
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={dialogPago}
+        onOpenChange={(open) => {
+          setDialogPago(open);
+          if (!open) {
+            if (!procesando) {
+              setMetodoPago('efectivo');
+            }
+            setMontoPagado('');
+            setPagoPorComensal(false);
+            setComensalSeleccionadoPago(null);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Procesar Pago</DialogTitle>
+            <DialogDescription>
+              Confirma el total a cobrar y selecciona el método de pago para finalizar la venta.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {/* Total a pagar */}
             <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
               <p className="text-sm text-gray-600">Total a pagar</p>
               <p className="text-3xl font-bold text-orange-600">
-                ${modoCuentaRapida ? calcularTotalRapido().toFixed(2) : (pedidoMesa?.total?.toFixed(2) || '0.00')}
+                {formatearMonto(obtenerTotalPago())}
               </p>
             </div>
+
+            {pagoPorComensal && comensalSeleccionadoPago && !modoCuentaRapida && (
+              <div className="rounded-md border border-dashed border-orange-300 bg-orange-50 p-3 text-sm text-orange-700">
+                Cobro asignado a <span className="font-semibold">{comensalSeleccionadoPago.nombre}</span>
+              </div>
+            )}
 
             {/* Método de pago */}
             <div>
@@ -1680,14 +2205,70 @@ export default function Caja() {
       {/* Dialog de Éxito */}
       <Dialog open={dialogExito} onOpenChange={setDialogExito}>
         <DialogContent className="sm:max-w-md">
-          <div className="text-center py-6">
-            <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">
-              ¡Pago Exitoso!
-            </h3>
-            <p className="text-gray-600">
-              La venta se ha procesado correctamente
-            </p>
+          <div className="py-6 space-y-4 text-center">
+            <DialogHeader className="space-y-4 text-center">
+              <CheckCircle className="w-20 h-20 text-green-500 mx-auto" />
+              <div className="space-y-2">
+                <DialogTitle className="text-2xl font-bold text-gray-800">
+                  ¡Pago Exitoso!
+                </DialogTitle>
+                <DialogDescription className="text-base text-gray-600">
+                  La venta se procesó correctamente.
+                </DialogDescription>
+              </div>
+            </DialogHeader>
+
+            {ultimaVenta?.ticket && (
+              <div className="text-sm text-gray-600 space-y-1">
+                {ultimaVenta.ticket.mesa && (
+                  <p>
+                    Mesa:
+                    <span className="font-semibold text-gray-800 ml-1">
+                      {ultimaVenta.ticket.mesa}
+                    </span>
+                  </p>
+                )}
+                {ultimaVenta.ticket.comensal && (
+                  <p>
+                    Comensal:
+                    <span className="font-semibold text-gray-800 ml-1">
+                      {ultimaVenta.ticket.comensal}
+                    </span>
+                  </p>
+                )}
+                <p>
+                  Total cobrado:
+                  <span className="font-semibold text-gray-800 ml-1">
+                    {formatearMonto(ultimaVenta.ticket.total)}
+                  </span>
+                </p>
+                <p>Método de pago: {ultimaVenta.ticket.metodoPago}</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Button
+                className="w-full bg-orange-500 hover:bg-orange-600"
+                onClick={handleImprimirTicket}
+                disabled={impresionEnCurso}
+              >
+                {impresionEnCurso ? (
+                  'Verificando impresora...'
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <Printer className="w-4 h-4" />
+                    Imprimir ticket
+                  </span>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setDialogExito(false)}
+              >
+                Cerrar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

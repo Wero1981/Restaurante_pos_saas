@@ -31,6 +31,7 @@ urlpatterns = [
     path("api/pedidos/", include("ventas.pedidos_urls")),
     path("api/comensales/", include("ventas.comensales_urls")),
     path("api/caja/", include("caja.urls")),
+    path("api/impresion/", include("impresion.urls")),
     
     # Swagger/OpenAPI Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

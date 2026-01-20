@@ -71,7 +71,7 @@ export default function ListaRestaurantes() {
             </h2>
             <p className="text-gray-600 mt-1">Administra la información de tus restaurantes</p>
           </div>
-          <Button onClick={() => navigate('/restaurante')} className="bg-orange-500 hover:bg-orange-600">
+          <Button onClick={() => navigate('/restaurante', {state:{ esNuevo: true }})} className="bg-orange-500 hover:bg-orange-600">
             <Plus className="w-4 h-4 mr-2" />
             Nuevo Restaurante
           </Button>
@@ -114,7 +114,7 @@ export default function ListaRestaurantes() {
                 }
               </p>
               {!busqueda && (
-                <Button onClick={() => navigate('/restaurante')} className="bg-orange-500 hover:bg-orange-600">
+                <Button onClick={() => navigate('/restaurante', {state:{ esNuevo: true }})} className="bg-orange-500 hover:bg-orange-600">
                   <Plus className="w-4 h-4 mr-2" />
                   Crear Primer Restaurante
                 </Button>

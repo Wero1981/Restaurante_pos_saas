@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ChevronRight, ChevronDown, Plus, Search, Edit, Trash2, FolderPlus, Package, PackageOpen } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Search, Edit, Trash2, FolderPlus, Package, PackageOpen, CodeIcon } from "lucide-react";
 
 export default function Inventario() {
   const [categorias, setCategorias] = useState([]);
@@ -32,6 +32,7 @@ export default function Inventario() {
     id: null,
     nombre: '',
     descripcion: '',
+    codigo_barras: '',
     precio: '',
     precio_por_unidad: 'unidad',
     stock: 0,
@@ -106,6 +107,7 @@ export default function Inventario() {
         id: null,
         nombre: '',
         descripcion: '',
+        codigo_barras: '',
         precio: '',
         stock: 0,
         categoria: null,
@@ -511,21 +513,31 @@ export default function Inventario() {
                 />
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Unidad de medida *</label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                value={productoForm.precio_por_unidad}
-                onChange={(e) => setProductoForm({ ...productoForm, precio_por_unidad: e.target.value })}
-                required
-              >
-                <option value="unidad">Unidad</option>
-                <option value="kilogramo">Kilogramo</option>
-                <option value="gramo">Gramo</option>
-                <option value="litro">Litro</option>
-                <option value="mililitro">Mililitro</option>
-                <option value="porcion">Porción</option>
-              </select>
+            <div className='grid grid-cols-2 gap-4'>
+              <div>
+                <label className="block text-sm font-medium mb-2">Unidad de medida *</label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                    value={productoForm.precio_por_unidad}
+                    onChange={(e) => setProductoForm({ ...productoForm, precio_por_unidad: e.target.value })}
+                    required
+                  >
+                    <option value="unidad">Unidad</option>
+                    <option value="kilogramo">Kilogramo</option>
+                    <option value="gramo">Gramo</option>
+                    <option value="litro">Litro</option>
+                    <option value="mililitro">Mililitro</option>
+                    <option value="porcion">Porción</option>
+                  </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Código de Barras</label>
+                <Input
+                  placeholder="Código de barras del producto"
+                  value={productoForm.codigo_barras}
+                  onChange={(e) => setProductoForm({ ...productoForm, codigo_barras: e.target.value })}
+                />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium mb-2">Descripción</label>

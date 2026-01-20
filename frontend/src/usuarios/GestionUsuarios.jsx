@@ -345,17 +345,7 @@ export default function GestionUsuarios() {
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo Usuario
               </Button>
-            )}
-            
-            {/* Alternativa: Mostrar botón solo si tiene permiso */}
-            {(userRol === 'admin' || tienePermiso('administrar_usuarios'))  && (
-              <Button onClick={abrirDialogNuevo}>
-                <Plus className="w-4 h-4 mr-2" />
-                Nuevo Usuario
-              </Button>
-            )}
-        
-           
+            )}        
           </div>
 
           {/* Tabla de Usuarios */}

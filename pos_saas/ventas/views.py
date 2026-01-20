@@ -606,6 +606,11 @@ class EliminarDetalleView(APIView):
                     {'error': 'El producto ya fue cancelado'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            if detalle.pagado:
+                return Response(
+                    {'error': 'No se puede eliminar un producto que ya fue cobrado'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Eliminar el detalle
             detalle.delete()
@@ -650,6 +655,16 @@ class CancelarDetalleView(APIView):
                         'detalle': serializer.data
                     },
                     status=status.HTTP_200_OK
+                )
+
+            if detalle.pagado:
+                serializer = PedidoDetalleSerializer(detalle)
+                return Response(
+                    {
+                        'mensaje': 'No se puede cancelar un producto que ya fue cobrado',
+                        'detalle': serializer.data
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
             detalle.cancelado = True
@@ -781,10 +796,14 @@ class PedidoViewSet(ModelViewSet):
         """Obtiene los detalles (productos) de un pedido específico."""
         try:
             pedido = self.get_object()
-            detalles = PedidoDetalle.objects.filter(pedido=pedido).select_related(
+            detalles = PedidoDetalle.objects.filter(
+                pedido=pedido,
+                cancelado=False,
+                pagado=False
+            ).select_related(
                 'producto', 'comensal'
             ).order_by('fecha')
-            
+
             serializer = PedidoDetalleSerializer(detalles, many=True)
             return Response(serializer.data)
         except Exception as e:

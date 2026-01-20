@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import api from '../services/api';
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
         Dialog,
         DialogContent,
@@ -20,6 +20,7 @@ export default function RegisterRestaurante() {
     const [open, setOpen] = useState(false);
     const [slugTouched, setSlugTouched] = useState(false);
     const navigate = useNavigate();
+    const { state } = useLocation();
 
     const createSlug = useCallback((value) => {
         return (value || '')
@@ -51,12 +52,13 @@ export default function RegisterRestaurante() {
     };
 
     useEffect(() => {
-        //Verificar si el restaurante ya está registrado
+        
         const checkRestaurante = async () => {
             try {
                 const response = await api.get('/restaurantes/mi-restaurante/');
                 if (response.data) {
-                    setData(response.data); 
+                    setData(response.data);
+                    console.log("Restaurante ya registrado:", response.data);
                     if (response.data?.slug) {
                         setSlugTouched(true);
                     }
@@ -75,9 +77,16 @@ export default function RegisterRestaurante() {
         setError("");
         setLoading(true);
         
+        
         try {
-            await api.post('/restaurantes/mi-restaurante/', data);
-            setOpen(true);
+            if(state.esNuevo){
+
+                 await api.post('/restaurantes/', data);
+                    setOpen(true);
+            }else{
+                await api.post('/restaurantes/mi-restaurante/', data);
+                setOpen(true);
+            }
         } catch (error) {
             console.error("Registration failed:", error);
             setError(error.response?.data?.message || "Error al registrar el restaurante");

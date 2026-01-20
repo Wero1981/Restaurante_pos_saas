@@ -1,4 +1,4 @@
-import { use, useState } from 'react';
+import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { usePOS } from '@/context/POSContext';
@@ -14,10 +14,10 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Table 
+  Table,
+  ArrowDownUp,
+  ArrowDownCircle,
 } from 'lucide-react';
-import { ConPermiso } from '@/components/ConPermiso';
-import path from 'path';
 
 
 export default function Sidebar() {
@@ -28,28 +28,22 @@ export default function Sidebar() {
   
   const menuItems = [
     ...(userRol === 'mesero' || userRol === 'admin' ? [
-      {path: '/mesas', icon: Table, label: 'Mesas' }
+      {path: '/mesas', icon: Table, label: 'Mesas', treeview: false },
     ] : []),
     ...(userRol === 'admin' || userRol === 'cocinero' ? [
-      {path: '/ordenes', icon: LayoutGrid, label: 'Órdenes' }
+      {path: '/ordenes', icon: LayoutGrid, label: 'Órdenes', treeview: false },
 
     ] : []),
     ...(userRol === 'admin' || userRol === 'cajero' ? [
-      {path: '/caja', icon: CreditCard, label: 'Caja' },
-      {path: '/usuarios', icon: Users, label: 'Usuarios' },
-      {path: '/inventario', icon: Warehouse, label: 'Inventario' },
+      {path: '/caja', icon: CreditCard, label: 'Caja', treeview: false },
+      {path: '/inventario/movimientos', icon: Package, label: 'Movimientos', treeview: true },
     ] : []),
     ...(userRol === 'admin' ? [
-      { path: '/restaurantes', icon: Store, label: 'Restaurantes' },
-      { path: '/restaurante', icon: Settings, label: 'Configuración' }
+      { path: '/restaurantes', icon: Store, label: 'Restaurantes', treeview: false },
+      {path: '/usuarios', icon: Users, label: 'Usuarios', treeview: false },
+      { path: '/restaurante', icon: Settings, label: 'Configuración', treeview: false }
     ] : [])
   ];
-
-  // { path: '/productos', icon: Package, label: 'Productos' },
-    // { path: '/inventario', icon: Warehouse, label: 'Inventario' },
-    // { path: '/mesas', icon: LayoutGrid, label: 'Mesas' },
-    // { path: '/usuarios', icon: Users, label: 'Usuarios' },
-    // { path: '/caja', icon: CreditCard, label: 'Caja' },
   
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -95,6 +89,68 @@ export default function Sidebar() {
           {menuItems.map((item) => {
             const IconComponent = item.icon;
             return (
+              item.treeview ? (
+                <li key={item.path}>  
+                  <details className="group">
+                    <summary className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                      location.pathname.startsWith(item.path)
+                        ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 scale-105' 
+                        : 'text-gray-300 hover:bg-gray-800/50 hover:text-white hover:translate-x-1'
+                    } ${
+                      collapsed ? 'justify-center' : ''
+                    }`}>
+                      <div className={`w-5 h-5 flex items-center justify-center rounded-md ${
+                        location.pathname.startsWith(item.path)
+                          ? 'bg-white/10 text-white'
+                          : 'bg-gray-800/40 text-gray-400'
+                      }`}>
+                        <ChevronRight className="w-3 h-3 group-open:hidden" />
+                        <ChevronLeft className="hidden w-3 h-3 group-open:block" />
+                      </div>
+                      <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${
+                        location.pathname.startsWith(item.path)
+                          ? 'bg-white/10' 
+                          : 'bg-gray-800/50'
+                      }`}>
+                        <IconComponent className="w-4 h-4" />
+                      </div>
+                      {!collapsed && <span className="font-medium">{item.label}</span>}
+                    </summary>
+                    <ul className="mt-2 space-y-1 pl-11">
+                      <li>
+                        <Link to="/inventario"
+                          className={`block p-2 rounded-lg transition-all duration-200 ${
+                            location.pathname === '/inventario'
+                              ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 scale-105' 
+                              : 'text-gray-300 hover:bg-gray-800/50 hover:text-white hover:translate-x-1'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Warehouse className="w-4 h-4" />
+                            Inventario
+                          </span>
+                        </Link>
+                      </li>
+                      <li>
+                        <Link 
+                          to="/inventario/movimientos-entrada" 
+                          className={`block p-2 rounded-lg transition-all duration-200 ${
+                            location.pathname === '/inventario/movimientos-entrada'
+                              ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 scale-105' 
+                              : 'text-gray-300 hover:bg-gray-800/50 hover:text-white hover:translate-x-1'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <ArrowDownUp  className="w-4 h-4" />
+                            Movimientos
+                          </span>
+                        </Link>
+                      </li>
+                    </ul>
+                  </details>
+  
+                </li>
+              ) : (
               <li key={item.path}>
                 <Link 
                   className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
@@ -107,6 +163,7 @@ export default function Sidebar() {
                   to={item.path}
                   title={collapsed ? item.label : ''}
                 >
+                
                   <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${
                     location.pathname === item.path 
                       ? 'bg-white/10' 
@@ -117,8 +174,10 @@ export default function Sidebar() {
                   {!collapsed && <span className="font-medium">{item.label}</span>}
                 </Link>
               </li>
-            );
+            ))
           })}
+       
+
         </ul>
       </nav>
       
