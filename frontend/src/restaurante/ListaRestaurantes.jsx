@@ -29,7 +29,7 @@ export default function ListaRestaurantes() {
         title: 'Error',
         text: 'No se pudieron cargar los restaurantes',
         confirmButtonColor: '#f97316'
-      });
+      }); 
       setRestaurantes([]);
     } finally {
       setLoading(false);
@@ -59,7 +59,9 @@ export default function ListaRestaurantes() {
     });
   };
 
-  return (
+
+
+  return (  
     <div className="h-[calc(100vh-80px)] flex flex-col p-6">
       {/* Header */}
       <div className="mb-6">
