@@ -20,6 +20,9 @@ export const POSProvider = ({ children }) => {
   const [comensalSeleccionado, setComensalSeleccionado] = useState(null);
   const [carrito, setCarrito] = useState([]);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [restauranteActivo, setRestauranteActivo] = useState(null);
+  const [restaurantes, setRestaurantes] = useState([]);
+
 
   const cargarUsuarioYPermisos = async () => {
     try {
@@ -41,6 +44,26 @@ export const POSProvider = ({ children }) => {
         } else {
           setPermisos([]);
         }
+
+        console.log('✅ Usuario cargado:', userData);
+        console.log('✅ Rol del usuario:', userData.rol);
+        console.log('✅ Permisos del usuario:', userData.permisos);
+
+        //usuario normal con restaurante asignado
+        if(userData.rol !== 'admin' && userData.restaurante) {
+          setRestauranteActivo(userData.restaurante);
+          localStorage.setItem('restaurante_id', userData.restaurante);
+        }
+
+        //Admin sin restaurante asignado, pero con restaurante_id en localStorage (para pruebas)
+        if(userData.rol === 'admin') {
+          const restauranteGuardado = localStorage.getItem('restauranteActivo');
+          if (restauranteGuardado) {
+            setRestauranteActivo(JSON.parse(restauranteGuardado));
+          }
+        }
+
+
       }
     } catch (error) {
       console.error('❌ Error cargando datos del usuario:', error);
@@ -177,6 +200,11 @@ export const POSProvider = ({ children }) => {
     setCarrito([]);
   }, []);
 
+  const  seleccionarRestaurante = useCallback((restaurante) => {
+    setRestauranteActivo(restaurante);
+    localStorage.setItem('restauranteActivo', JSON.stringify(restaurante));
+    resetearPOS();
+  }, [resetearPOS]);
   // Cerrar sesión y limpiar todo
   const cerrarSesion = useCallback(() => {
     localStorage.removeItem('token');
@@ -230,6 +258,9 @@ export const POSProvider = ({ children }) => {
     // Layout
     showSidebar,
     setShowSidebar,
+    // Restaurante
+    restauranteActivo,
+    seleccionarRestaurante,
   };
 
   return (

@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Search, Edit, MapPin, Phone, Mail, Globe, Store, Calendar } from "lucide-react";
+import { usePOS } from '../context/POSContext';
 
 export default function ListaRestaurantes() {
   const navigate = useNavigate();
   const [restaurantes, setRestaurantes] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [loading, setLoading] = useState(true);
+ const { seleccionarRestaurante } = usePOS();
 
   useEffect(() => {
     cargarRestaurantes();
@@ -135,14 +137,16 @@ export default function ListaRestaurantes() {
                     <h3 className="text-xl font-bold text-gray-900 mb-1">
                       {restaurante.nombre}
                     </h3>
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      restaurante.activo 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {restaurante.activo ? '● Activo' : '○ Inactivo'}
-                    </span>
+                   
                   </div>
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600"
+                    onClick={() => {
+                      seleccionarRestaurante(restaurante);
+                    }}
+                  >
+                    <Store className="w-4 h-4" />
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"

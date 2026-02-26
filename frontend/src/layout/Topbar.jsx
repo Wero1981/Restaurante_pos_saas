@@ -10,10 +10,8 @@ import Cajero from '@/icons/Cajero';
 
 export default function Topbar() {
   const navigate = useNavigate();
-  const { user, userRol, setShowSidebar } = usePOS();
+  const { user, userRol, setShowSidebar, restauranteActivo } = usePOS();
   const [fullScreen, setFullScreen] = useState(false);
-
-  
   const currentDate = new Date().toLocaleDateString('es-ES', {
     weekday: 'long',
     year: 'numeric',
@@ -45,8 +43,13 @@ export default function Topbar() {
       <div className="px-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center">
-            <i className="fas fa-calendar-alt text-primary mr-2"></i>
-            <span className="text-muted-foreground">{currentDate}</span>
+           
+            {restauranteActivo && (
+              <span className="text-orange-500 font-semibold">
+                🏪 {restauranteActivo.nombre}
+              </span>
+            )}
+            
           </div>
           
           <div className="flex items-center space-x-4">
