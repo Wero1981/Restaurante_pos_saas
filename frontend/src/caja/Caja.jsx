@@ -36,7 +36,11 @@ import { obtenerNombreRestauranteLocal } from '../lib/restaurante';
 
 export default function Caja() {
   const navigate = useNavigate();
-  const { seleccionarMesa: seleccionarMesaContexto, establecerPedidoActivo } = usePOS();
+  const {
+    seleccionarMesa: seleccionarMesaContexto,
+    establecerPedidoActivo,
+    restauranteActivo,
+  } = usePOS();
 
 
   // Estados para caja
@@ -45,8 +49,6 @@ export default function Caja() {
   const [dialogAbrirCaja, setDialogAbrirCaja] = useState(false);
   const [montoInicial, setMontoInicial] = useState('');
   const [cargandoCaja, setCargandoCaja] = useState(true);
-  const [restaurantes, setRestaurantes] = useState([]);
-  const [restauranteSeleccionado, setRestauranteSeleccionado] = useState(null);
   const [tipoMovimiento, setTipoMovimiento] = useState('entrada');
   const [montoMovimiento, setMontoMovimiento] = useState('');
   const [descripcionMovimiento, setDescripcionMovimiento] = useState('');
@@ -83,12 +85,7 @@ export default function Caja() {
   const [ultimaVenta, setUltimaVenta] = useState(null);
   const [impresionEnCurso, setImpresionEnCurso] = useState(false);
 
-  const restauranteActivo = useMemo(() => {
-    if (!restauranteSeleccionado) {
-      return null;
-    }
-    return restaurantes.find((rest) => rest.id === restauranteSeleccionado) || null;
-  }, [restaurantes, restauranteSeleccionado]);
+  const restauranteSeleccionado = restauranteActivo?.id ?? null;
 
   const nombreRestaurante = useMemo(
     () => restauranteActivo?.nombre || obtenerNombreRestauranteLocal(),
@@ -193,24 +190,15 @@ export default function Caja() {
     }
   }, []);
 
-  const cargarRestaurantes = useCallback(async () => {
-    try {
-      const res = await api.get('/restaurantes/');
-      setRestaurantes(Array.isArray(res.data) ? res.data : []);
-    } catch (error) {
-      console.error('Error cargando restaurantes:', error);
-    }
-  }, []);
-
   const cargarMesasConCuentas = useCallback(async () => {
     try {
       setCargandoMesas(true);
       // Obtener todas las mesas
-      const resMesas = await api.get(`/mesas/?restaurante=${restauranteSeleccionado}`);
+      const resMesas = await api.get('/mesas/');
       const todasMesas = resMesas.data;
       
       // Obtener pedidos activos con detalles
-      const resPedidos = await api.get(`/pedidos/?restaurante=${restauranteSeleccionado}`);
+      const resPedidos = await api.get('/pedidos/');
       const pedidosActivos = resPedidos.data;
       
       console.log('Pedidos cargados:', pedidosActivos);
@@ -238,7 +226,7 @@ export default function Caja() {
     } finally {
       setCargandoMesas(false);
     }
-  }, [restauranteSeleccionado]);
+  }, []);
   const notificarPedidoPagado = useCallback((pedidoId) => {
     if (!pedidoId) {
       return;
@@ -404,17 +392,23 @@ export default function Caja() {
     }).format(Number.isFinite(numero) ? numero : 0);
   };
 
-  // Verificar si hay caja abierta al cargar
+  // Verificar la caja cada vez que cambia el restaurante activo.
   useEffect(() => {
-    cargarRestaurantes();
-    const restoId = localStorage.getItem('restaurante_id');
-    if (restoId) {
-      setRestauranteSeleccionado(parseInt(restoId));
-      verificarCajaAbierta(restoId);
+    setCajaAbierta(false);
+    setCajaActual(null);
+    setMesasConCuentas([]);
+    setMesaSeleccionadaLocal(null);
+    setPedidoMesa(null);
+    setModoCuentaRapida(false);
+    setCarritoRapido([]);
+    setResumenCaja(null);
+
+    if (restauranteSeleccionado) {
+      verificarCajaAbierta(restauranteSeleccionado);
     } else {
       setCargandoCaja(false);
     }
-  }, [cargarRestaurantes]);
+  }, [restauranteSeleccionado]);
   
   // Cargar mesas cuando la caja está abierta
   useEffect(() => {
@@ -532,7 +526,7 @@ export default function Caja() {
         setCargandoCaja(false);
         return;
       }
-      const res = await api.get(`/caja/cajas/?restaurante=${restauranteId}`);
+      const res = await api.get('/caja/cajas/');
       
       if (res.data && res.data.length > 0) {
         setCajaActual(res.data[0]);
@@ -572,11 +566,7 @@ export default function Caja() {
         return;
       }
       
-      const usuarioData = JSON.parse(localStorage.getItem('user'));
-      
       const payload = {
-        restaurante: parseInt(restauranteSeleccionado),
-        usuario: usuarioData.id,
         monto_inicial: parseFloat(montoInicial),
         abierta: true
       };
@@ -1160,29 +1150,10 @@ export default function Caja() {
                 Abre la caja para comenzar a procesar ventas
               </p>
               
-              {/* Selector de restaurante */}
-              {restaurantes.length > 1 && (
-                <div className="mb-6 text-left">
-                  <label className="block text-sm font-medium mb-2">
-                    Selecciona un restaurante
-                  </label>
-                  <select
-                    className="w-full border rounded-md p-2"
-                    value={restauranteSeleccionado || ''}
-                    onChange={(e) => {
-                      const restoId = parseInt(e.target.value);
-                      setRestauranteSeleccionado(restoId);
-                      localStorage.setItem('restaurante_id', restoId);
-                    }}
-                  >
-                    <option value="">-- Selecciona --</option>
-                    {restaurantes.map(resto => (
-                      <option key={resto.id} value={resto.id}>
-                        {resto.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {!restauranteSeleccionado && (
+                <p className="mb-6 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3">
+                  Selecciona un restaurante en la barra superior.
+                </p>
               )}
               
               <Button 

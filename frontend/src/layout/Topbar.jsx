@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { User, Expand, Shrink, LogOut, Crown, Utensils, Wallet, UserCog } from 'lucide-react';
+import { Expand, Shrink, LogOut, Store } from 'lucide-react';
 import { usePOS } from '../context/POSContext';
+import api from '../services/api';
 import Boss from '@/icons/boss';
 import Mesero from '@/icons/Mesero';
 import Cajero from '@/icons/Cajero';
@@ -10,18 +11,47 @@ import Cajero from '@/icons/Cajero';
 
 export default function Topbar() {
   const navigate = useNavigate();
-  const { user, userRol, setShowSidebar, restauranteActivo } = usePOS();
+  const {
+    user,
+    userRol,
+    setShowSidebar,
+    restauranteActivo,
+    seleccionarRestaurante,
+    cerrarSesion,
+  } = usePOS();
   const [fullScreen, setFullScreen] = useState(false);
-  const currentDate = new Date().toLocaleDateString('es-ES', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  const [restaurantes, setRestaurantes] = useState([]);
+
+  useEffect(() => {
+    if (userRol !== 'admin') {
+      return;
+    }
+
+    const cargarRestaurantes = async () => {
+      try {
+        const response = await api.get('/restaurantes/');
+        setRestaurantes(Array.isArray(response.data) ? response.data : []);
+      } catch (error) {
+        console.error('Error cargando restaurantes en la barra superior:', error);
+        setRestaurantes([]);
+      }
+    };
+
+    cargarRestaurantes();
+  }, [userRol]);
   
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/');
+    cerrarSesion();
+    navigate('/login', { replace: true });
+  };
+
+  const handleRestauranteChange = (event) => {
+    const restauranteId = Number(event.target.value);
+    const restaurante = restaurantes.find((item) => item.id === restauranteId);
+
+    if (restaurante) {
+      seleccionarRestaurante(restaurante);
+    }
   };
 
   const toggleFullScreen = () => {
@@ -42,14 +72,32 @@ export default function Topbar() {
     <nav className="bg-background border-b">
       <div className="px-6">
         <div className="flex justify-between items-center">
-          <div className="flex items-center">
-           
-            {restauranteActivo && (
-              <span className="text-orange-500 font-semibold">
-                🏪 {restauranteActivo.nombre}
+          <div className="flex items-center min-w-0">
+            {userRol === 'admin' ? (
+              <label className="flex items-center gap-2 min-w-0">
+                <Store className="w-5 h-5 text-orange-500 shrink-0" />
+                <span className="sr-only">Restaurante activo</span>
+                <select
+                  value={restauranteActivo?.id || ''}
+                  onChange={handleRestauranteChange}
+                  className="h-9 max-w-64 rounded-md border border-input bg-background px-3 text-sm font-semibold text-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="" disabled>
+                    Selecciona un restaurante
+                  </option>
+                  {restaurantes.map((restaurante) => (
+                    <option key={restaurante.id} value={restaurante.id}>
+                      {restaurante.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : restauranteActivo ? (
+              <span className="flex items-center gap-2 text-orange-500 font-semibold">
+                <Store className="w-5 h-5" />
+                {restauranteActivo.nombre}
               </span>
-            )}
-            
+            ) : null}
           </div>
           
           <div className="flex items-center space-x-4">

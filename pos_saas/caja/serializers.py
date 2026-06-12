@@ -11,7 +11,8 @@ class CajaSerializer(serializers.ModelSerializer):
                   'cierre_automatico']
         read_only_fields = ['id', 'fecha_apertura', 'total_ventas', 'total_efectivo',
                             'total_tarjeta', 'total_otros', 'total_movimientos_entrada',
-                            'total_movimientos_salida', 'cierre_automatico']
+                            'total_movimientos_salida', 'cierre_automatico',
+                            'restaurante', 'usuario']
 
 
 class MovimientoCajaSerializer(serializers.ModelSerializer):
@@ -19,4 +20,3 @@ class MovimientoCajaSerializer(serializers.ModelSerializer):
         model = MovimientoCaja
         fields = ['id', 'caja', 'tipo', 'monto', 'descripcion', 'fecha']
         read_only_fields = ['id', 'fecha']
-

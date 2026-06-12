@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from .serializers import CajaSerializer, MovimientoCajaSerializer
 from .models import Caja, MovimientoCaja
 from .services import obtener_resumen_caja
+from core.restaurantes import get_restaurante_request
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 @extend_schema_view(
     list=extend_schema(
@@ -64,14 +65,25 @@ class CajaViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        restaurante_id = self.request.query_params.get('restaurante')
-        queryset = Caja.objects.all()
-        if restaurante_id:
-            queryset = queryset.filter(restaurante_id=restaurante_id)
+        restaurante = get_restaurante_request(self.request)
+        if not restaurante:
+            return Caja.objects.none()
 
+        queryset = Caja.objects.filter(restaurante=restaurante)
         if getattr(self, 'action', None) == 'list':
             return queryset.filter(abierta=True).order_by('-fecha_apertura')
         return queryset.order_by('-fecha_apertura')
+
+    def perform_create(self, serializer):
+        restaurante = get_restaurante_request(self.request)
+        if not restaurante:
+            raise ValidationError('Selecciona un restaurante válido antes de abrir la caja.')
+        if Caja.objects.filter(restaurante=restaurante, abierta=True).exists():
+            raise ValidationError('Ya existe una caja abierta para este restaurante.')
+        serializer.save(
+            restaurante=restaurante,
+            usuario=self.request.user,
+        )
 
     @action(detail=True, methods=['get'], url_path='resumen')
     def resumen(self, request, pk=None):
@@ -95,11 +107,23 @@ class MovimientoCajaViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        restaurante = get_restaurante_request(self.request)
+        if not restaurante:
+            return MovimientoCaja.objects.none()
+
         caja_id = self.request.query_params.get('caja')
-        return MovimientoCaja.objects.filter(caja_id=caja_id).order_by('-fecha')
+        queryset = MovimientoCaja.objects.filter(
+            caja__restaurante=restaurante,
+        )
+        if caja_id:
+            queryset = queryset.filter(caja_id=caja_id)
+        return queryset.order_by('-fecha')
 
     def perform_create(self, serializer):
         caja = serializer.validated_data['caja']
+        restaurante = get_restaurante_request(self.request)
+        if not restaurante or caja.restaurante_id != restaurante.id:
+            raise ValidationError('La caja no pertenece al restaurante activo.')
         if not caja.abierta:
             raise ValidationError('No se pueden registrar movimientos en una caja cerrada.')
         serializer.save()

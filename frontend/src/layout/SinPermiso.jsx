@@ -41,7 +41,7 @@ export default function SinPermiso() {
               </Button>
               
               <Button 
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/login', { replace: true })}
                 className="w-full bg-orange-500 hover:bg-orange-600"
               >
                 <Home className="w-4 h-4 mr-2" />

@@ -11,6 +11,7 @@ import Pedido from '../pedido/Pedido';
 import Ordenes from '../ordenes/Ordenes';
 import Caja from '../caja/Caja';
 import GestionUsuarios from '../usuarios/GestionUsuarios';
+import Suscripciones from '../suscripciones/Suscripciones';
 import SinPermiso from '../layout/SinPermiso';
 import Layout from '../layout/layout';
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -83,8 +84,14 @@ export default function AppRouter() {
           } />
           
           <Route path="/usuarios" element={
-            <RutaProtegida permiso="administrar_usuarios">
+            <RutaProtegida rol="admin">
               <GestionUsuarios />
+            </RutaProtegida>
+          } />
+
+          <Route path="/suscripcion" element={
+            <RutaProtegida rol="admin">
+              <Suscripciones />
             </RutaProtegida>
           } />
           
@@ -99,4 +106,3 @@ export default function AppRouter() {
     </BrowserRouter>
   );
 }
-

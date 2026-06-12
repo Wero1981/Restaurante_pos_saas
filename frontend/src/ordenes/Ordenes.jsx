@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Swal from 'sweetalert2';
 import api from '@/services/api';
+import { usePOS } from '@/context/POSContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Clock, Users, UtensilsCrossed, Trash2, CircleX } from 'lucide-react';
@@ -34,12 +35,13 @@ const formatTime = (isoString) => {
       hour: '2-digit',
       minute: '2-digit'
     });
-  } catch (error) {
+  } catch {
     return '';
   }
 };
 
 export default function Ordenes() {
+  const { restauranteActivo, userRol } = usePOS();
   const [ordenes, setOrdenes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -51,6 +53,14 @@ export default function Ordenes() {
     if (mostrarLoader) {
       setLoading(true);
     }
+
+    if (userRol === 'admin' && !restauranteActivo?.id) {
+      setOrdenes([]);
+      setError('Selecciona un restaurante en la barra superior.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await api.get('/pedidos/cocina/');
       const data = Array.isArray(response.data) ? response.data : [];
@@ -63,7 +73,7 @@ export default function Ordenes() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [restauranteActivo?.id, userRol]);
 
   useEffect(() => {
     cargarOrdenes(true);

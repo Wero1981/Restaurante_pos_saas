@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Search, Edit, Trash2, Users, Mail, Shield } from "lucide-react";
 import { usePOS } from '@/context/POSContext';
-import { ConPermiso } from '@/components/ConPermiso';
 
 export default function GestionUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
@@ -31,16 +30,15 @@ export default function GestionUsuarios() {
     permisos_ids: [],
     activo: true
   });
-  const [restaurante, setRestaurante] = useState(null);
   const [emailLocalPart, setEmailLocalPart] = useState('');
-  const { tienePermiso, userRol } = usePOS();
+  const { restauranteActivo } = usePOS();
 
   const domainSuffix = useMemo(() => {
-    if (!restaurante?.slug) {
+    if (!restauranteActivo?.slug) {
       return '';
     }
-    return `@${restaurante.slug}.com`;
-  }, [restaurante]);
+    return `@${restauranteActivo.slug}.com`;
+  }, [restauranteActivo]);
 
   const sanitizeLocalPart = useCallback((value) => {
     return (value || '')
@@ -69,25 +67,12 @@ export default function GestionUsuarios() {
     return sanitizeLocalPart(local);
   }, [domainSuffix, sanitizeLocalPart]);
 
-  useEffect(() => {
-    setUsuarioForm((prev) => {
-      const desiredEmail = emailLocalPart
-        ? `${emailLocalPart}${domainSuffix || ''}`
-        : '';
+  const cargarUsuarios = useCallback(async () => {
+    if (!restauranteActivo?.id) {
+      setUsuarios([]);
+      return;
+    }
 
-      if (prev.email === desiredEmail) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        email: desiredEmail,
-      };
-    });
-  }, [emailLocalPart, domainSuffix]);
-
-
-  const cargarUsuarios = async () => {
     try {
       const res = await api.get('/restaurantes/usuarios/');
       setUsuarios(Array.isArray(res.data) ? res.data : []);
@@ -95,33 +80,45 @@ export default function GestionUsuarios() {
       console.error('Error cargando usuarios:', error);
       setUsuarios([]);
     }
-  };
-
-  const cargarRestaurante = useCallback(async () => {
-    try {
-      const res = await api.get('/restaurantes/mi-restaurante/');
-      setRestaurante(res.data || null);
-    } catch (error) {
-      console.error('Error cargando restaurante:', error);
-      setRestaurante(null);
-    }
-  }, []);
+  }, [restauranteActivo?.id]);
 
   useEffect(() => {
-    cargarUsuarios();
-    cargarPermisos();
-    cargarRestaurante();
-  }, [cargarRestaurante]);
+    let cancelado = false;
 
-  const cargarPermisos = async () => {
-    try {
-      const res = await api.get('/restaurantes/permisos/');
-      setPermisos(Array.isArray(res.data) ? res.data : []);
-    } catch (error) {
-      console.error('Error cargando permisos:', error);
-      setPermisos([]);
-    }
-  };
+    const cargarDatos = async () => {
+      if (!restauranteActivo?.id) {
+        await Promise.resolve();
+        if (!cancelado) {
+          setUsuarios([]);
+          setPermisos([]);
+        }
+        return;
+      }
+
+      try {
+        const [usuariosResponse, permisosResponse] = await Promise.all([
+          api.get('/restaurantes/usuarios/'),
+          api.get('/restaurantes/permisos/'),
+        ]);
+
+        if (!cancelado) {
+          setUsuarios(Array.isArray(usuariosResponse.data) ? usuariosResponse.data : []);
+          setPermisos(Array.isArray(permisosResponse.data) ? permisosResponse.data : []);
+        }
+      } catch (error) {
+        console.error('Error cargando gestión de usuarios:', error);
+        if (!cancelado) {
+          setUsuarios([]);
+          setPermisos([]);
+        }
+      }
+    };
+
+    cargarDatos();
+    return () => {
+      cancelado = true;
+    };
+  }, [restauranteActivo?.id]);
 
   const guardarUsuario = async (e) => {
     e.preventDefault();
@@ -339,13 +336,10 @@ export default function GestionUsuarios() {
               />
             </div>
             
-            {/* Mostrar botón siempre si es admin O tiene permiso */}
-            {(userRol === 'admin' || tienePermiso('administrar_usuarios')) && (
-              <Button onClick={abrirDialogNuevo}>
-                <Plus className="w-4 h-4 mr-2" />
-                Nuevo Usuario
-              </Button>
-            )}        
+            <Button onClick={abrirDialogNuevo} disabled={!restauranteActivo?.id}>
+              <Plus className="w-4 h-4 mr-2" />
+              Nuevo Usuario
+            </Button>
           </div>
 
           {/* Tabla de Usuarios */}
@@ -414,24 +408,20 @@ export default function GestionUsuarios() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <ConPermiso permiso="administrar_usuarios">
-                            <button 
-                              onClick={() => abrirDialogEditar(usuario)}
-                              className="p-1 hover:bg-blue-100 rounded"
-                              title="Editar usuario"
-                            >
-                              <Edit className="w-4 h-4 text-blue-600" />
-                            </button>
-                          </ConPermiso>
-                          <ConPermiso permiso="administrar_usuarios">
-                            <button 
-                              onClick={() => eliminarUsuario(usuario.id)}
-                              className="p-1 hover:bg-red-100 rounded"
-                              title="Eliminar usuario"
-                            >
-                              <Trash2 className="w-4 h-4 text-red-600" />
-                            </button>
-                          </ConPermiso>
+                          <button
+                            onClick={() => abrirDialogEditar(usuario)}
+                            className="p-1 hover:bg-blue-100 rounded"
+                            title="Editar usuario"
+                          >
+                            <Edit className="w-4 h-4 text-blue-600" />
+                          </button>
+                          <button
+                            onClick={() => eliminarUsuario(usuario.id)}
+                            className="p-1 hover:bg-red-100 rounded"
+                            title="Eliminar usuario"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -476,7 +466,7 @@ export default function GestionUsuarios() {
                   title="Solo letras minúsculas, números, puntos, guiones y guiones bajos"
                 />
                 <span className="px-3 py-2 border border-l-0 border-gray-300 rounded-r-md bg-gray-100 text-sm text-gray-600">
-                  {domainSuffix || '@' + (restaurante?.slug || 'restaurante') + '.com'}
+                  {domainSuffix || '@' + (restauranteActivo?.slug || 'restaurante') + '.com'}
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-1">

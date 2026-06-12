@@ -14,7 +14,6 @@ api.interceptors.request.use(config => {
   }
   
   // Agregar ID del restaurante si existe (opcional con la nueva implementación)
-  const user = localStorage.getItem('user');
   const restauranteId = localStorage.getItem('restaurante_id');
   if (restauranteId) {
     config.headers['X-Restaurante-ID'] = restauranteId;
@@ -32,6 +31,9 @@ api.interceptors.response.use(
       
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('restaurante_id');
+      localStorage.removeItem('restauranteActivo');
       
       Swal.fire({
         icon: 'warning',
@@ -46,4 +48,3 @@ api.interceptors.response.use(
 );
 
 export default api;
-      

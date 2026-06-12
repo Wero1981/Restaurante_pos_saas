@@ -1,7 +1,5 @@
 from restaurantes.models import UsuarioRestaurante
 from django.http import JsonResponse
-from django.utils.timezone import now
-
 class RestauranteMiddleware:
     """
     Middleware para asignar el restaurante asociado al usuario autenticado en cada solicitud.
@@ -35,8 +33,8 @@ class SuscripcionMiddleware:
 
     def __call__(self, request):
         if request.user.is_authenticated and request.restaurante:
-            suscripcion = request.getattr(request.restaurante, 'suscripcion_actual', None)
-            if suscripcion and suscripcion.esta_vencida():
+            suscripcion = getattr(request.restaurante, 'suscripcion', None)
+            if suscripcion and suscripcion.esta_vencida:
                 return JsonResponse({
                        'error': 'Suscripcion vencida. Por favor, renueve su suscripción para continuar utilizando el servicio.',
                        'codigo': 'SUBSCRIPCION_VENCIDA'

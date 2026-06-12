@@ -1,13 +1,22 @@
 from rest_framework.permissions import BasePermission
 from restaurantes.models import UsuarioRestaurante
+from core.restaurantes import get_restaurante_request
 
 class EsAdmin(BasePermission):
     def has_permission(self, request, view):
-        rel = UsuarioRestaurante.objects.filter(
+        restaurante = get_restaurante_request(request)
+        if not restaurante:
+            return False
+
+        if restaurante.propietario_id == request.user.id:
+            return True
+
+        return UsuarioRestaurante.objects.filter(
             usuario=request.user,
-            restaurante=request.restaurante
-        ).first()
-        return rel and rel.rol == 'admin'
+            restaurante=restaurante,
+            activo=True,
+            rol=UsuarioRestaurante.ADMIN,
+        ).exists()
     
 
 class TienePermisoRestaurante(BasePermission):

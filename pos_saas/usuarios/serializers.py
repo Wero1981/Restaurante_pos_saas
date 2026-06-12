@@ -2,7 +2,9 @@ from rest_framework import serializers
 from .models import Usuario
 from restaurantes.models import Restaurante, UsuarioRestaurante
 from suscripciones.models import Plan, Suscripcion
-from datetime import date, timedelta
+from datetime import timedelta
+from django.db import transaction
+from django.utils import timezone
 
 
 
@@ -14,6 +16,7 @@ class RegistroSerializer(serializers.ModelSerializer):
         fields = ['email', 'password', 'nombre', 'restaurante_nombre']
         extra_kwargs = {'password': {'write_only': True}}
 
+    @transaction.atomic
     def create(self, validated_data):
         restaurante_nombre = validated_data.pop('restaurante_nombre')
         password = validated_data.pop('password')
@@ -40,11 +43,19 @@ class RegistroSerializer(serializers.ModelSerializer):
             rol='admin'
         )
 
-        plan = Plan.objects.get(nombre='Basico')
+        plan = Plan.objects.filter(nombre='Basico').order_by('id').first()
+        if not plan:
+            plan = Plan.objects.create(
+                nombre='Basico',
+                precio='0.00',
+                limite_usuarios=5,
+                limite_sucursales=1,
+                limi_cajas=1,
+            )
         Suscripcion.objects.create(
             restaurante=restaurante,
             plan=plan,
-            vence = date.today() + timedelta(days=15)
+            vence=timezone.localdate() + timedelta(days=15)
         )
 
         return user

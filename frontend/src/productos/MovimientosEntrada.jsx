@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
 import api from '../services/api';
+import { usePOS } from '../context/POSContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Search, PackagePlus, ArrowUpCircle, ArrowDownCircle, Loader2 } from "lucide-react";
 
 export default function MovimientosEntrada() {
+  const { restauranteActivo } = usePOS();
   const [productos, setProductos] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [seleccionado, setSeleccionado] = useState(null);
@@ -24,6 +26,10 @@ export default function MovimientosEntrada() {
         const res = await api.get('/productos/');
         const listado = Array.isArray(res.data) ? res.data : [];
         setProductos(listado);
+        setSeleccionado(null);
+        setBusqueda('');
+        setCantidad('');
+        setMotivo('');
       } catch (error) {
         console.error('Error cargando productos para movimientos de entrada:', error);
         Swal.fire({
@@ -37,7 +43,7 @@ export default function MovimientosEntrada() {
     };
 
     cargar();
-  }, []);
+  }, [restauranteActivo?.id]);
 
   const productosFiltrados = useMemo(() => {
     if (!busqueda) {

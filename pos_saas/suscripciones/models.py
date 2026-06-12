@@ -1,9 +1,6 @@
 from django.db import models
-
-# Create your models here.
-from django.db import models
+from django.utils import timezone
 from restaurantes.models import Restaurante
-from caja.models import Caja
 
 class Plan(models.Model):
     nombre = models.CharField(max_length=50)
@@ -29,3 +26,17 @@ class Suscripcion(models.Model):
 
     def __str__(self):
         return f"{self.restaurante.nombre} - {self.plan.nombre}"
+
+    @property
+    def esta_vencida(self):
+        return not self.activa or self.vence < timezone.localdate()
+
+    @property
+    def dias_restantes(self):
+        if not self.activa:
+            return 0
+        return max((self.vence - timezone.localdate()).days, 0)
+
+    @property
+    def en_periodo_prueba(self):
+        return self.inicio <= timezone.localdate() <= self.vence

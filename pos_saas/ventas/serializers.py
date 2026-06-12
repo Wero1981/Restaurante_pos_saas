@@ -2,19 +2,11 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from .models import Venta, VentaDetalle, Mesa, Comensal, PedidoDetalle, Pedido
 from productos.models  import Producto
-from restaurantes.models import UsuarioRestaurante
 from caja.models import Caja
 from django.utils import timezone
 from decimal import Decimal
+from core.restaurantes import get_restaurante_request
 
-
-
-def get_restaurante_usuario(user):
-    """Obtiene el restaurante asociado al usuario autenticado."""
-    if not user.is_authenticated:
-        return None
-    rel = UsuarioRestaurante.objects.filter(usuario=user, activo=True).first()
-    return rel.restaurante if rel else None
 
 
 class VentaDetalleSerializer(serializers.ModelSerializer):
@@ -48,7 +40,7 @@ class VentaSerializer(serializers.ModelSerializer):
         pedido_detalles_ids = validated_data.pop('pedido_detalles_ids', [])
         total = validated_data.pop('total', Decimal('0.00'))
         request = self.context['request']
-        restaurante = get_restaurante_usuario(request.user)
+        restaurante = get_restaurante_request(request)
 
         caja_abierta = Caja.objects.filter(
             restaurante=restaurante,
@@ -264,6 +256,20 @@ class PedidoSerializer(serializers.ModelSerializer):
             'comensales',
             'detalles'
         ]
+        read_only_fields = ['restaurante']
+
+    def validate_mesa(self, mesa):
+        request = self.context.get('request')
+        restaurante = (
+            get_restaurante_request(request)
+            if request
+            else getattr(self.instance, 'restaurante', None)
+        )
+        if mesa and restaurante and mesa.restaurante_id != restaurante.id:
+            raise serializers.ValidationError(
+                'La mesa pertenece a otro restaurante.'
+            )
+        return mesa
     
     def get_total(self, obj):
         pendientes = obj.items.filter(cancelado=False, pagado=False)

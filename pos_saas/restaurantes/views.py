@@ -11,7 +11,8 @@ from drf_spectacular.types import OpenApiTypes
 from .models import Restaurante, UsuarioRestaurante, Permiso
 from .serializer import RestauranteSerializer, UsuarioRestauranteSerializer, PermisoSerializer
 from usuarios.models import Usuario
-from core.permissions import TienePermisoRestaurante
+from core.permissions import EsAdmin, TienePermisoRestaurante
+from core.restaurantes import get_restaurante_request
 
 
 def format_restaurant_email(restaurante, value):
@@ -191,13 +192,11 @@ class RestauranteViewSet(viewsets.ModelViewSet):
 class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar usuarios del restaurante."""
     serializer_class = UsuarioRestauranteSerializer
-    permission_classes = [IsAuthenticated, TienePermisoRestaurante]
-    permiso_requerido = 'administrar_usuarios'
+    permission_classes = [IsAuthenticated, EsAdmin]
 
     def get_queryset(self):
         """Obtiene los usuarios del restaurante asociado al usuario autenticado."""
-        # Obtener el restaurante del usuario
-        restaurante = Restaurante.objects.filter(propietario=self.request.user, activo=True).first()
+        restaurante = get_restaurante_request(self.request)
         if not restaurante:
             return UsuarioRestaurante.objects.none()
         
@@ -207,8 +206,7 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         """Crear un nuevo usuario para el restaurante."""
-        # Obtener el restaurante del usuario autenticado
-        restaurante = Restaurante.objects.filter(propietario=request.user, activo=True).first()
+        restaurante = get_restaurante_request(request)
         if not restaurante:
             return Response(
                 {'error': 'No se encontró un restaurante asociado a este usuario'},
@@ -336,5 +334,5 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
 class PermisoViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet de solo lectura para listar permisos disponibles."""
     serializer_class = PermisoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, EsAdmin]
     queryset = Permiso.objects.all()

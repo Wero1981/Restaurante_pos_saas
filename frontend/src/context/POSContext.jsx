@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import api from '../services/api';
 
 const POSContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const usePOS = () => {
   const context = useContext(POSContext);
   if (!context) {
@@ -21,7 +21,6 @@ export const POSProvider = ({ children }) => {
   const [carrito, setCarrito] = useState([]);
   const [showSidebar, setShowSidebar] = useState(true);
   const [restauranteActivo, setRestauranteActivo] = useState(null);
-  const [restaurantes, setRestaurantes] = useState([]);
 
 
   const cargarUsuarioYPermisos = async () => {
@@ -50,16 +49,35 @@ export const POSProvider = ({ children }) => {
         console.log('✅ Permisos del usuario:', userData.permisos);
 
         //usuario normal con restaurante asignado
-        if(userData.rol !== 'admin' && userData.restaurante) {
-          setRestauranteActivo(userData.restaurante);
-          localStorage.setItem('restaurante_id', userData.restaurante);
+        if(userData.rol !== 'admin' && userData.restaurante_id) {
+          const restaurante = {
+            id: userData.restaurante_id,
+            nombre: userData.restaurante_nombre || 'Restaurante',
+            slug: userData.restaurante_slug || null,
+          };
+          setRestauranteActivo(restaurante);
+          localStorage.setItem('restaurante_id', String(userData.restaurante_id));
+          localStorage.setItem('restauranteActivo', JSON.stringify(restaurante));
         }
 
         //Admin sin restaurante asignado, pero con restaurante_id en localStorage (para pruebas)
         if(userData.rol === 'admin') {
           const restauranteGuardado = localStorage.getItem('restauranteActivo');
           if (restauranteGuardado) {
-            setRestauranteActivo(JSON.parse(restauranteGuardado));
+            const restaurante = JSON.parse(restauranteGuardado);
+            setRestauranteActivo(restaurante);
+            if (restaurante?.id) {
+              localStorage.setItem('restaurante_id', String(restaurante.id));
+            }
+          } else if (userData.restaurante_id) {
+            const restaurante = {
+              id: userData.restaurante_id,
+              nombre: userData.restaurante_nombre || 'Restaurante',
+              slug: userData.restaurante_slug || null,
+            };
+            setRestauranteActivo(restaurante);
+            localStorage.setItem('restaurante_id', String(restaurante.id));
+            localStorage.setItem('restauranteActivo', JSON.stringify(restaurante));
           }
         }
 
@@ -76,7 +94,7 @@ export const POSProvider = ({ children }) => {
     // Solo cargar si hay token (sesión activa)
     const token = localStorage.getItem('token');
     if (token) {
-      cargarUsuarioYPermisos();
+      Promise.resolve().then(() => cargarUsuarioYPermisos());
     }
   }, []);
 
@@ -203,13 +221,16 @@ export const POSProvider = ({ children }) => {
   const  seleccionarRestaurante = useCallback((restaurante) => {
     setRestauranteActivo(restaurante);
     localStorage.setItem('restauranteActivo', JSON.stringify(restaurante));
+    localStorage.setItem('restaurante_id', String(restaurante.id));
     resetearPOS();
   }, [resetearPOS]);
   // Cerrar sesión y limpiar todo
   const cerrarSesion = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('restaurante_id');
+    localStorage.removeItem('restauranteActivo');
     setUser(null);
     setUserRol(null);
     setPermisos([]);

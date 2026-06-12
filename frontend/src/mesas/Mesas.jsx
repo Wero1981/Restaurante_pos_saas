@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { usePOS } from '../context/POSContext';
@@ -10,18 +10,19 @@ import { Plus, Users, MapPin, Edit, Trash2 } from "lucide-react";
 
 export default function Mesas() {
   const navigate = useNavigate();
-  const { seleccionarMesa, establecerPedidoActivo, mesaSeleccionada } = usePOS();
+  const {
+    seleccionarMesa,
+    establecerPedidoActivo,
+    mesaSeleccionada,
+    restauranteActivo,
+  } = usePOS();
   const [mesas, setMesas] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mesaForm, setMesaForm] = useState({ numero: '', capacidad: 4 });
   const [editando, setEditando] = useState(null);
-  const [cargandoPedido, setCargandoPedido] = useState(false);
+  const [, setCargandoPedido] = useState(false);
 
-  useEffect(() => {
-    cargarMesas();
-  }, []);
-
-  const cargarMesas = async () => {
+  const cargarMesas = useCallback(async () => {
     try {
       const res = await api.get('/mesas/');
       setMesas(Array.isArray(res.data) ? res.data : []);
@@ -29,7 +30,11 @@ export default function Mesas() {
       console.error('Error cargando mesas:', error);
       setMesas([]);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    cargarMesas();
+  }, [cargarMesas, restauranteActivo?.id]);
 
   const guardarMesa = async (e) => {
     e.preventDefault();
@@ -275,4 +280,3 @@ export default function Mesas() {
     </div>
   );
 }
-

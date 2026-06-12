@@ -8,6 +8,41 @@ from drf_spectacular.utils import extend_schema
 from django.contrib.auth import authenticate
 
 
+def construir_datos_usuario(user):
+    from restaurantes.models import UsuarioRestaurante
+
+    relacion = (
+        UsuarioRestaurante.objects.filter(usuario=user, activo=True)
+        .select_related('restaurante')
+        .prefetch_related('permisos')
+        .first()
+    )
+    user_data = {
+        'id': user.id,
+        'email': user.email,
+        'nombre': user.nombre,
+        'apellido': user.apellidoP,
+    }
+
+    if relacion:
+        user_data.update({
+            'rol': relacion.rol,
+            'restaurante_id': relacion.restaurante.id,
+            'restaurante_nombre': relacion.restaurante.nombre,
+            'restaurante_slug': relacion.restaurante.slug,
+            'permisos': [
+                {
+                    'id': permiso.id,
+                    'codigo': permiso.codigo,
+                    'descripcion': permiso.descripcion,
+                }
+                for permiso in relacion.permisos.all()
+            ],
+        })
+
+    return user_data
+
+
 class LoginView(APIView):
     """Vista personalizada de login que retorna tokens y datos del usuario."""
     permission_classes = (AllowAny,)
@@ -38,37 +73,10 @@ class LoginView(APIView):
         
         refresh = RefreshToken.for_user(user)
         
-        # Obtener rol y permisos del usuario
-        from restaurantes.models import UsuarioRestaurante
-        usuario_restaurante = UsuarioRestaurante.objects.filter(
-            usuario=user,
-            activo=True
-        ).select_related('restaurante').prefetch_related('permisos').first()
-        
-        user_data = {
-            'id': user.id,
-            'email': user.email,
-            'nombre': user.nombre,
-            'apellido': user.apellidoP,
-        }
-        
-        # Agregar rol y permisos si existe la relación
-        if usuario_restaurante:
-            user_data['rol'] = usuario_restaurante.rol
-            user_data['restaurante_id'] = usuario_restaurante.restaurante.id
-            user_data['permisos'] = [
-                {
-                    'id': p.id,
-                    'codigo': p.codigo,
-                    'descripcion': p.descripcion
-                }
-                for p in usuario_restaurante.permisos.all()
-            ]
-        
         return Response({
             'access': str(refresh.access_token),
             'refresh': str(refresh),
-            'user': user_data
+            'user': construir_datos_usuario(user),
         })
 
 
@@ -92,4 +100,5 @@ class RegistroUsuarioView(APIView):
         return Response({
             'refresh': str(refresh),
             'access': str(refresh.access_token),
+            'user': construir_datos_usuario(user),
         })

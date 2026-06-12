@@ -16,18 +16,14 @@ from .serializers import (
     PedidoDetalleSerializer,
     PedidoSerializer
 )
-from restaurantes.models import UsuarioRestaurante
 from productos.models import Producto
 from core.permissions import TienePermisoRestaurante
+from core.restaurantes import get_restaurante_request
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 
 
-def get_restaurante_usuario(user):
-    """Obtiene el restaurante asociado al usuario autenticado."""
-    if not user.is_authenticated:
-        return None
-    rel = UsuarioRestaurante.objects.filter(usuario=user, activo=True).first()
-    return rel.restaurante if rel else None
+def get_restaurante_usuario(request):
+    return get_restaurante_request(request)
 
 
 class VentaViewSet(ModelViewSet):
@@ -35,7 +31,7 @@ class VentaViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        restaurante = get_restaurante_usuario(self.request.user)
+        restaurante = get_restaurante_usuario(self.request)
         if not restaurante:
             return Venta.objects.none()
         return Venta.objects.filter(restaurante=restaurante)
@@ -81,14 +77,14 @@ class MesaViewSet(ModelViewSet):
 
     def get_queryset(self):
         """Obtiene las mesas del restaurante asociado al usuario autenticado."""
-        restaurante = get_restaurante_usuario(self.request.user)
+        restaurante = get_restaurante_usuario(self.request)
         if not restaurante:
             return Mesa.objects.none()
         return Mesa.objects.filter(restaurante=restaurante, activa=True)
     
     def perform_create(self, serializer):
         """Asigna el restaurante al crear una mesa."""
-        restaurante = get_restaurante_usuario(self.request.user)
+        restaurante = get_restaurante_usuario(self.request)
         if not restaurante:
             raise ValidationError('Usuario no está asociado a ningún restaurante')
         serializer.save(restaurante=restaurante)
@@ -133,7 +129,7 @@ class AbrirPedidoView(APIView):
         description="Abre un nuevo pedido para una mesa específica. Si la mesa ya tiene un pedido abierto, retorna ese pedido."
     )
     def post(self, request):
-        restaurante = get_restaurante_usuario(request.user)
+        restaurante = get_restaurante_usuario(request)
         if not restaurante:
             return Response(
                 {'error': 'Usuario no está asociado a ningún restaurante'},
@@ -219,7 +215,7 @@ class CancelarPedidoView(APIView):
         description="Cancela un pedido existente y libera la mesa asociada."
     )
     def post(self, request):
-        restaurante = get_restaurante_usuario(request.user)
+        restaurante = get_restaurante_usuario(request)
         if not restaurante:
             return Response(
                 {'error': 'Usuario no está asociado a ningún restaurante'},
@@ -329,7 +325,7 @@ class AgregarProductoView(APIView):
         description="Agrega un producto a un pedido existente. Calcula automáticamente el precio unitario y subtotal."
     )
     def post(self, request):
-        restaurante = get_restaurante_usuario(request.user)
+        restaurante = get_restaurante_usuario(request)
         if not restaurante:
             return Response(
                 {'error': 'Usuario no está asociado a ningún restaurante'},
@@ -491,7 +487,7 @@ class EnviarCocinaView(APIView):
         description="Marca los productos de un pedido como enviados a cocina. Si no se especifican detalle_ids, envía todos los productos pendientes."
     )
     def post(self, request):
-        restaurante = get_restaurante_usuario(request.user)
+        restaurante = get_restaurante_usuario(request)
         if not restaurante:
             return Response(
                 {'error': 'Usuario no está asociado a ningún restaurante'},
@@ -581,7 +577,7 @@ class EliminarDetalleView(APIView):
 
     def delete(self, request, detalle_id):
         """Elimina un detalle específico del pedido si no ha sido enviado a cocina."""
-        restaurante = get_restaurante_usuario(request.user)
+        restaurante = get_restaurante_usuario(request)
         if not restaurante:
             return Response(
                 {'error': 'Usuario no está asociado a ningún restaurante'},
@@ -634,7 +630,7 @@ class CancelarDetalleView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, detalle_id):
-        restaurante = get_restaurante_usuario(request.user)
+        restaurante = get_restaurante_usuario(request)
         if not restaurante:
             return Response(
                 {'error': 'Usuario no está asociado a ningún restaurante'},
@@ -698,7 +694,7 @@ class ComensalViewSet(ModelViewSet):
 
     def get_queryset(self):
         """Obtiene los comensales de las mesas del restaurante asociado al usuario autenticado."""
-        restaurante = get_restaurante_usuario(self.request.user)
+        restaurante = get_restaurante_usuario(self.request)
         if not restaurante:
             return Comensal.objects.none()
         
@@ -713,7 +709,7 @@ class ComensalViewSet(ModelViewSet):
     
     def perform_create(self, serializer):
         """Valida que la mesa pertenezca al restaurante antes de crear el comensal."""
-        restaurante = get_restaurante_usuario(self.request.user)
+        restaurante = get_restaurante_usuario(self.request)
         if not restaurante:
             raise ValidationError('Usuario no está asociado a ningún restaurante')
         
@@ -731,7 +727,7 @@ class PedidoViewSet(ModelViewSet):
     
     def get_queryset(self):
         """Obtiene los pedidos del restaurante asociado al usuario autenticado."""
-        restaurante = get_restaurante_usuario(self.request.user)
+        restaurante = get_restaurante_usuario(self.request)
         if not restaurante:
             return Pedido.objects.none()
         return Pedido.objects.filter(restaurante=restaurante).select_related('mesa', 'mesero')
@@ -739,7 +735,7 @@ class PedidoViewSet(ModelViewSet):
     @action(detail=False, methods=['get'], url_path='cocina')
     def cocina(self, request):
         """Lista pedidos abiertos con productos enviados a cocina."""
-        restaurante = get_restaurante_usuario(request.user)
+        restaurante = get_restaurante_usuario(request)
         if not restaurante:
             return Response([])
 

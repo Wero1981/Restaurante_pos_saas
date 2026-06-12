@@ -5,17 +5,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { usePOS } from "../context/POSContext";
 
 export default function RegisterUser() {
     const [ form, setForm ] = useState({});
     const navigate = useNavigate();
+    const { cargarUsuarioYPermisos } = usePOS();
 
     const submit = async (e) => {
         e.preventDefault();
         try {
             const res = await api.post("/usuarios/registro/", form);
             localStorage.setItem("token", res.data.access);
-            navigate("/restaurante");
+            localStorage.setItem("refresh_token", res.data.refresh);
+            localStorage.setItem("user", JSON.stringify(res.data.user));
+
+            const restaurante = {
+                id: res.data.user.restaurante_id,
+                nombre: res.data.user.restaurante_nombre,
+                slug: res.data.user.restaurante_slug,
+            };
+            localStorage.setItem("restaurante_id", String(restaurante.id));
+            localStorage.setItem("restauranteActivo", JSON.stringify(restaurante));
+
+            await cargarUsuarioYPermisos();
+            navigate("/restaurantes");
         } catch (error) {
             console.error(error);
         }

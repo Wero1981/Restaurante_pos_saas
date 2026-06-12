@@ -22,6 +22,7 @@ export default function Login() {
             
             // Guardar token
             localStorage.setItem('token', response.data.access);
+            localStorage.setItem('refresh_token', response.data.refresh);
             
             // Guardar información del usuario (ya incluye rol y permisos)
             const userInfo = response.data.user;

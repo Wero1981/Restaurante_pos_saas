@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
+import { usePOS } from '../context/POSContext';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import {
 import { ChevronRight, ChevronDown, Plus, Search, Edit, Trash2, FolderPlus, Package, PackageOpen, CodeIcon } from "lucide-react";
 
 export default function Inventario() {
+  const { restauranteActivo } = usePOS();
   const [categorias, setCategorias] = useState([]);
   const [productos, setProductos] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null);
@@ -41,7 +43,7 @@ export default function Inventario() {
     activo: true
   });
 
-  const cargarProductos = async () => {
+  const cargarProductos = useCallback(async () => {
     try {
       const res = await api.get('/productos/');
       setProductos(Array.isArray(res.data) ? res.data : []);
@@ -49,9 +51,9 @@ export default function Inventario() {
       console.error('Error cargando productos:', error);
       setProductos([]);
     }
-  };
+  }, []);
 
-  const cargarCategorias = async () => {
+  const cargarCategorias = useCallback(async () => {
     try {
       const res = await api.get('/productos/categorias/');
       setCategorias(Array.isArray(res.data) ? res.data : []);
@@ -59,12 +61,17 @@ export default function Inventario() {
       console.error('Error cargando categorías:', error);
       setCategorias([]);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    cargarCategorias();
-    cargarProductos();
-  }, []);
+    const cargarInventario = async () => {
+      await Promise.all([cargarCategorias(), cargarProductos()]);
+      setCategoriaSeleccionada(null);
+      setBusqueda('');
+    };
+
+    cargarInventario();
+  }, [cargarCategorias, cargarProductos, restauranteActivo?.id]);
   
   const guardarCategoria = async (e) => {
     e.preventDefault();

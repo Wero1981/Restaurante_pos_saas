@@ -15,6 +15,7 @@ import { usePOS } from '../context/POSContext';
  * </RutaProtegida>
  */
 export function RutaProtegida({ 
+  rol,
   permiso,           // Permiso único requerido
   permisos = [],     // Array de permisos (requiere al menos uno)
   requiereTodos = false,  // Si true, requiere TODOS los permisos del array
@@ -22,6 +23,15 @@ export function RutaProtegida({
   redirectTo = '/sin-permiso'  // Ruta a la que redirigir si no tiene permiso
 }) {
   const { tienePermiso, userRol } = usePOS();
+  const token = localStorage.getItem('token');
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (rol && userRol !== rol) {
+    return <Navigate to={redirectTo} replace />;
+  }
 
   // Si es admin, permitir acceso total
   if (userRol === 'admin') {
