@@ -44,7 +44,7 @@ class Migration(migrations.Migration):
                     "username",
                     models.CharField(
                         error_messages={
-                            "unique": "A user with that username already exists."
+                            "unique": "El nombre de usuario ya existe."
                         },
                         help_text="Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.",
                         max_length=150,

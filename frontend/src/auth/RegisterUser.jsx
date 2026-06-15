@@ -1,25 +1,29 @@
 import { useState } from "react";
 import api from "../services/api";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { usePOS } from "../context/POSContext";
+import GoogleAuthButton from "./GoogleAuthButton";
 
 export default function RegisterUser() {
     const [ form, setForm ] = useState({});
+    const [error, setError] = useState("");
+    const [registroPendiente, setRegistroPendiente] = useState(null);
+    const [mensajeReenvio, setMensajeReenvio] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
     const { cargarUsuarioYPermisos } = usePOS();
 
-    const submit = async (e) => {
-        e.preventDefault();
-        try {
-            const res = await api.post("/usuarios/registro/", form);
-            localStorage.setItem("token", res.data.access);
-            localStorage.setItem("refresh_token", res.data.refresh);
-            localStorage.setItem("user", JSON.stringify(res.data.user));
+    const guardarSesion = async (res) => {
+        localStorage.setItem("token", res.data.access);
+        localStorage.setItem("refresh_token", res.data.refresh);
+        localStorage.setItem("user", JSON.stringify(res.data.user));
 
+        if (res.data.user.restaurante_id) {
             const restaurante = {
                 id: res.data.user.restaurante_id,
                 nombre: res.data.user.restaurante_nombre,
@@ -27,12 +31,105 @@ export default function RegisterUser() {
             };
             localStorage.setItem("restaurante_id", String(restaurante.id));
             localStorage.setItem("restauranteActivo", JSON.stringify(restaurante));
+        }
 
-            await cargarUsuarioYPermisos();
-            navigate("/restaurantes");
+        await cargarUsuarioYPermisos();
+        navigate("/restaurantes");
+    };
+
+    const submit = async (e) => {
+        e.preventDefault();
+        setError("");
+        setIsLoading(true);
+        try {
+            const res = await api.post("/usuarios/registro/", form);
+            setRegistroPendiente({
+                email: res.data.email,
+                detail: res.data.detail,
+            });
         } catch (error) {
             console.error(error);
+            const apiError = error.response?.data;
+            setError(
+                apiError?.detail
+                || apiError?.email?.[0]
+                || "No se pudo crear la cuenta."
+            );
+        } finally {
+            setIsLoading(false);
         }
+    };
+
+    const reenviarVerificacion = async () => {
+        setMensajeReenvio("");
+        setIsLoading(true);
+        try {
+            const response = await api.post("/usuarios/reenviar-verificacion/", {
+                email: registroPendiente.email,
+            });
+            setMensajeReenvio(response.data.detail);
+        } catch (error) {
+            console.error("Resend verification failed:", error);
+            setMensajeReenvio("No se pudo reenviar el correo. Intenta nuevamente.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleGoogleRegister = async (credentialResponse) => {
+        if (!form.restaurante_nombre?.trim()) {
+            setError("Escribe el nombre de tu restaurante antes de continuar con Google.");
+            return;
+        }
+
+        setError("");
+        setIsLoading(true);
+        try {
+            const res = await api.post("/usuarios/login-google/", {
+                credential: credentialResponse.credential,
+                restaurante_nombre: form.restaurante_nombre.trim(),
+            });
+            await guardarSesion(res);
+        } catch (error) {
+            console.error("Google register failed:", error);
+            setError(error.response?.data?.detail || "No se pudo crear la cuenta con Google.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    if (registroPendiente) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 px-6">
+                <Card className="w-full max-w-md">
+                    <CardHeader className="text-center">
+                        <i className="fas fa-envelope-circle-check text-5xl text-primary mb-3"></i>
+                        <CardTitle>Revisa tu correo</CardTitle>
+                        <CardDescription>{registroPendiente.detail}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4 text-center">
+                        <p className="font-medium">{registroPendiente.email}</p>
+                        {mensajeReenvio && (
+                            <Alert>
+                                <AlertDescription>{mensajeReenvio}</AlertDescription>
+                            </Alert>
+                        )}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full"
+                            onClick={reenviarVerificacion}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? "Enviando..." : "Reenviar correo"}
+                        </Button>
+                        <Link to="/login" className="block text-sm text-primary hover:underline">
+                            Ir al inicio de sesión
+                        </Link>
+                    </CardContent>
+                </Card>
+            </div>
+        );
     }
 
     return (
@@ -78,6 +175,11 @@ export default function RegisterUser() {
                                         Completa el formulario para registrar tu cuenta y restaurante
                                     </CardDescription>
                                 </div>
+                                {error && (
+                                    <Alert variant="destructive" className="mb-4">
+                                        <AlertDescription>{error}</AlertDescription>
+                                    </Alert>
+                                )}
                                 <form onSubmit={submit} className="space-y-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="nombre">
@@ -129,15 +231,29 @@ export default function RegisterUser() {
                                         />
                                     </div>
                         
-                                    <Button type="submit" className="w-full" size="lg">
+                                    <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
                                         <i className="fas fa-check mr-2"></i>
-                                        Crear Cuenta
+                                        {isLoading ? "Creando cuenta..." : "Crear Cuenta"}
                                     </Button>
+
+                                    <div className="flex items-center gap-3 py-1">
+                                        <div className="h-px flex-1 bg-border" />
+                                        <span className="text-xs uppercase text-muted-foreground">o</span>
+                                        <div className="h-px flex-1 bg-border" />
+                                    </div>
+
+                                    <GoogleAuthButton
+                                        onSuccess={handleGoogleRegister}
+                                        onError={setError}
+                                        text="signup_with"
+                                        disabled={isLoading}
+                                    />
+
                                     <div className="text-center text-sm text-muted-foreground">
                                         ¿Ya tienes cuenta?{" "}
-                                        <a href="/" className="text-primary hover:underline font-medium">
+                                        <Link to="/login" className="text-primary hover:underline font-medium">
                                             Inicia sesión aquí
-                                        </a>
+                                        </Link>
                                     </div>
                                 </form>
                             </div>

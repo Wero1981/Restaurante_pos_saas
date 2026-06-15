@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import timedelta
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -110,7 +111,7 @@ AUTH_USER_MODEL = "usuarios.Usuario"
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = "es-mx"
 
 TIME_ZONE = "UTC"
 
@@ -184,3 +185,24 @@ CORS_ALLOW_HEADERS = [
     "x-requested-with",
     "x-restaurante-id",  # Header personalizado para ID del restaurante
 ]
+
+GOOGLE_CLIENT_ID = os.environ.get(
+    "GOOGLE_CLIENT_ID",
+    "1090087507755-3spbdg5de57uba0ilu20cp5354vqr9h5.apps.googleusercontent.com",
+)
+
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    "no-reply@restaurantpos.local",
+)
+
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() == "true"

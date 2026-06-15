@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Login from '../auth/Login';
 import RegisterUser from '../auth/RegisterUser';
+import VerifyEmail from '../auth/VerifyEmail';
 import RegisterRestaurante from '../restaurante/RegisterRestaurante';
 import ListaRestaurantes from '../restaurante/ListaRestaurantes';
 import Productos from '../productos/Productos';
@@ -25,6 +26,7 @@ export default function AppRouter() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<Login />} />
         <Route path="/register-user" element={<RegisterUser />} />
+        <Route path="/verificar-correo" element={<VerifyEmail />} />
         <Route path="/sin-permiso" element={<SinPermiso />} />
 
         <Route element={

@@ -1,8 +1,16 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .views import RegistroUsuarioView, LoginView
+from .views import (
+    GoogleLoginView,
+    LoginView,
+    ReenviarVerificacionView,
+    RegistroUsuarioView,
+    VerificarCorreoView,
+)
 
 urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
+    path('login-google/', GoogleLoginView.as_view(), name='login_google'),
     path('registro/', RegistroUsuarioView.as_view(), name='registro_usuario'),
+    path('verificar-correo/', VerificarCorreoView.as_view(), name='verificar_correo'),
+    path('reenviar-verificacion/', ReenviarVerificacionView.as_view(), name='reenviar_verificacion'),
 ]

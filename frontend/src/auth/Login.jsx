@@ -2,6 +2,7 @@ import { useState } from "react";
 import api from '../services/api';
 import { useNavigate, Link } from "react-router-dom";
 import { usePOS } from '../context/POSContext';
+import GoogleAuthButton from "./GoogleAuthButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,52 +12,99 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 export default function Login() {
     const [data, setData] = useState({});
     const [error, setError] = useState("");
+    const [unverifiedEmail, setUnverifiedEmail] = useState("");
+    const [resendMessage, setResendMessage] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
     const { cargarUsuarioYPermisos } = usePOS();
+
+    const guardarSesion = async (response) => {
+        localStorage.setItem('token', response.data.access);
+        localStorage.setItem('refresh_token', response.data.refresh);
+
+        const userInfo = response.data.user;
+        localStorage.setItem('user', JSON.stringify(userInfo));
+
+        if (userInfo.restaurante_id) {
+            localStorage.setItem('restaurante_id', userInfo.restaurante_id);
+            localStorage.setItem('restauranteActivo', JSON.stringify({
+                id: userInfo.restaurante_id,
+                nombre: userInfo.restaurante_nombre,
+                slug: userInfo.restaurante_slug,
+            }));
+        }
+
+        await cargarUsuarioYPermisos();
+
+        const rutas = {
+            'admin': '/restaurantes',
+            'mesero': '/mesas',
+            'cocinero': '/ordenes',
+            'cajero': '/caja'
+        };
+
+        navigate(rutas[userInfo.rol] || '/sin-permiso');
+    }
 
     const handleLogin = async (e) => {
         e.preventDefault();
         setError("");
+        setUnverifiedEmail("");
+        setResendMessage("");
+        setIsLoading(true);
         try {
             const response = await api.post('/usuarios/login/', data);
             
-            // Guardar token
-            localStorage.setItem('token', response.data.access);
-            localStorage.setItem('refresh_token', response.data.refresh);
+            await guardarSesion(response);
             
-            // Guardar información del usuario (ya incluye rol y permisos)
-            const userInfo = response.data.user;
-            localStorage.setItem('user', JSON.stringify(userInfo));
-            
-            // Guardar ID del restaurante si existe
-            if (userInfo.restaurante_id) {
-                localStorage.setItem('restaurante_id', userInfo.restaurante_id);
-            }
-            
-         
-            // Cargar permisos del usuario en el contexto
-            await cargarUsuarioYPermisos();
-            let rol = userInfo.rol;
-            
-            switch (rol) {
-                case 'admin':
-                    navigate('/restaurantes');
-                    break;
-                case 'mesero':
-                    navigate('/mesas');
-                    break;
-                case 'cocinero':
-                    navigate('/ordenes');
-                    break;
-                case 'cajero':
-                    navigate('/caja');
-                    break;
-                default:
-                    navigate('/sin-permiso');
-            }
         } catch (error) {
             console.error("Login failed:", error);
-            setError("Email o contraseña incorrectos");
+            if (error.response?.data?.code === "email_not_verified") {
+                setError(error.response.data.detail);
+                setUnverifiedEmail(error.response.data.email || data.email);
+            } else {
+                setError("Email o contraseña incorrectos");
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const reenviarVerificacion = async () => {
+        setResendMessage("");
+        setIsLoading(true);
+        try {
+            const response = await api.post("/usuarios/reenviar-verificacion/", {
+                email: unverifiedEmail,
+            });
+            setResendMessage(response.data.detail);
+        } catch (error) {
+            console.error("Resend verification failed:", error);
+            setResendMessage("No se pudo reenviar el correo.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleGoogleLogin = async (credentialResponse) => {
+        setError("");
+        setIsLoading(true);
+        try {
+            const response = await api.post('/usuarios/login-google/', {
+                credential: credentialResponse.credential
+            });
+
+            await guardarSesion(response);
+
+        } catch (error) {
+            console.error("Google Login failed:", error);
+            if (error.response?.status === 404) {
+                setError("Esta cuenta aún no está registrada. Crea tu cuenta con Google.");
+            } else {
+                setError(error.response?.data?.detail || "Error al iniciar sesión con Google");
+            }
+        } finally {
+            setIsLoading(false);
         }
     };
     
@@ -75,6 +123,24 @@ export default function Login() {
                                 <i className="fas fa-exclamation-circle mr-2"></i>
                                 <AlertDescription>{error}</AlertDescription>
                             </Alert>
+                        )}
+                        {unverifiedEmail && (
+                            <div className="mb-4 space-y-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={reenviarVerificacion}
+                                    disabled={isLoading}
+                                >
+                                    Reenviar correo de verificación
+                                </Button>
+                                {resendMessage && (
+                                    <p className="text-center text-sm text-muted-foreground">
+                                        {resendMessage}
+                                    </p>
+                                )}
+                            </div>
                         )}
                         
                         <form onSubmit={handleLogin} className="space-y-4">
@@ -104,12 +170,25 @@ export default function Login() {
                                 />
                             </div>
                             
-                            <Button type="submit" className="w-full" size="lg">
+                            <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
                                 <i className="fas fa-sign-in-alt mr-2"></i>
-                                Iniciar Sesión
+                                {isLoading ? "Ingresando..." : "Iniciar Sesión"}
                             </Button>
-                            
-                            <div className="text-center">
+
+                            <div className="flex items-center gap-3 py-1">
+                                <div className="h-px flex-1 bg-border" />
+                                <span className="text-xs uppercase text-muted-foreground">o</span>
+                                <div className="h-px flex-1 bg-border" />
+                            </div>
+
+                            <GoogleAuthButton
+                                onSuccess={handleGoogleLogin}
+                                onError={setError}
+                                text="signin_with"
+                                disabled={isLoading}
+                            />
+
+                            <div className="text-center space-y-2">
                                 <Link to="/register-user" className="text-sm text-primary hover:underline">
                                     ¿No tienes cuenta? Regístrate aquí
                                 </Link>

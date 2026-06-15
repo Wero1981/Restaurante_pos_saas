@@ -145,7 +145,7 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
       position: 'top-end'
     });
 
-  }, [carrito]);
+  }, [carrito]); 
 
   useEffect(() => {
     let timeout;
