@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Plan, Suscripcion
+from .models import Pago, Plan, Suscripcion
 
 
 class PlanSerializer(serializers.ModelSerializer):
@@ -13,6 +13,22 @@ class PlanSerializer(serializers.ModelSerializer):
             "limite_usuarios",
             "limite_sucursales",
             "limi_cajas",
+            "mercadopago_plan_id",
+        ]
+
+
+class PagoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Pago
+        fields = [
+            "id",
+            "proveedor",
+            "proveedor_pago_id",
+            "monto",
+            "moneda",
+            "estado",
+            "fecha_pago",
+            "creado",
         ]
 
 
@@ -32,6 +48,10 @@ class SuscripcionSerializer(serializers.ModelSerializer):
             "activa",
             "inicio",
             "vence",
+            "proveedor",
+            "proveedor_suscripcion_id",
+            "estado_pago",
+            "cancelar_al_final",
             "dias_restantes",
             "esta_vencida",
             "en_periodo_prueba",

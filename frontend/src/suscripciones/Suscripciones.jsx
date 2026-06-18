@@ -37,6 +37,7 @@ export default function Suscripciones() {
   const [suscripcion, setSuscripcion] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [seleccionando, setSeleccionando] = useState(null);
+  const [pagando, setPagando] = useState(null);
   const [error, setError] = useState('');
 
   const cargarDatos = useCallback(async () => {
@@ -74,34 +75,53 @@ export default function Suscripciones() {
 
   const seleccionarPlan = async (plan) => {
     if (plan.id === suscripcion?.plan?.id) return;
+    const esGratis = Number(plan.precio) <= 0;
 
     const confirmacion = await Swal.fire({
       icon: 'question',
-      title: `Seleccionar plan ${plan.nombre}`,
-      text: 'Tu fecha de prueba no cambiará. El cobro se habilitará al integrar la pasarela de pago.',
+      title: esGratis ? `Seleccionar plan ${plan.nombre}` : `Pagar plan ${plan.nombre}`,
+      text: esGratis
+        ? 'Tu fecha de prueba no cambiará.'
+        : 'Te redirigiremos a Mercado Pago para completar la suscripción.',
       showCancelButton: true,
-      confirmButtonText: 'Seleccionar',
+      confirmButtonText: esGratis ? 'Seleccionar' : 'Continuar al pago',
       cancelButtonText: 'Cancelar',
       confirmButtonColor: '#f97316',
     });
     if (!confirmacion.isConfirmed) return;
 
-    setSeleccionando(plan.id);
+    if (!esGratis) {
+      setPagando(plan.id);
+    } else {
+      setSeleccionando(plan.id);
+    }
+
     try {
-      const response = await api.post('/suscripciones/seleccionar-plan/', {
-        plan_id: plan.id,
-      });
-      setSuscripcion(response.data.suscripcion);
-      Swal.fire({
-        icon: 'success',
-        title: 'Plan seleccionado',
-        text: response.data.detail,
-        confirmButtonColor: '#f97316',
-      });
+      if (esGratis) {
+        const response = await api.post('/suscripciones/seleccionar-plan/', {
+          plan_id: plan.id,
+        });
+        setSuscripcion(response.data.suscripcion);
+        Swal.fire({
+          icon: 'success',
+          title: 'Plan seleccionado',
+          text: response.data.detail,
+          confirmButtonColor: '#f97316',
+        });
+      } else {
+        const response = await api.post('/suscripciones/mercadopago/crear/', {
+          plan_id: plan.id,
+        });
+        if (response.data.checkout_url) {
+          window.location.href = response.data.checkout_url;
+          return;
+        }
+        setSuscripcion(response.data.suscripcion);
+      }
     } catch (requestError) {
       Swal.fire({
         icon: 'error',
-        title: 'No se pudo seleccionar el plan',
+        title: Number(plan.precio) <= 0 ? 'No se pudo seleccionar el plan' : 'No se pudo iniciar el pago',
         text:
           requestError.response?.data?.plan_id?.[0] ||
           requestError.response?.data?.detail ||
@@ -110,6 +130,7 @@ export default function Suscripciones() {
       });
     } finally {
       setSeleccionando(null);
+      setPagando(null);
     }
   };
 
@@ -155,6 +176,11 @@ export default function Suscripciones() {
                   <p className={`font-semibold ${suscripcion?.esta_vencida ? 'text-red-600' : 'text-green-600'}`}>
                     {suscripcion?.esta_vencida ? 'Vencida' : 'Activa'}
                   </p>
+                  {suscripcion?.estado_pago && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Pago: {suscripcion.estado_pago}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Días restantes</p>
@@ -181,6 +207,7 @@ export default function Suscripciones() {
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {planes.map((plan) => {
                 const actual = plan.id === suscripcion?.plan?.id;
+                const esGratis = Number(plan.precio) <= 0;
                 return (
                   <Card
                     key={plan.id}
@@ -220,15 +247,17 @@ export default function Suscripciones() {
                       <Button
                         className="w-full"
                         variant={actual ? 'outline' : 'default'}
-                        disabled={actual || seleccionando === plan.id}
+                        disabled={actual || seleccionando === plan.id || pagando === plan.id}
                         onClick={() => seleccionarPlan(plan)}
                       >
-                        {seleccionando === plan.id ? (
+                        {seleccionando === plan.id || pagando === plan.id ? (
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         ) : actual ? (
                           <Check className="w-4 h-4 mr-2" />
+                        ) : !esGratis ? (
+                          <CreditCard className="w-4 h-4 mr-2" />
                         ) : null}
-                        {actual ? 'Seleccionado' : 'Elegir plan'}
+                        {actual ? 'Seleccionado' : esGratis ? 'Elegir plan' : 'Pagar con Mercado Pago'}
                       </Button>
                     </CardContent>
                   </Card>

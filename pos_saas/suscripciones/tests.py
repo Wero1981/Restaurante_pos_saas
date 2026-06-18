@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.utils import timezone
 from rest_framework import status
@@ -7,7 +8,7 @@ from rest_framework.test import APITestCase
 from restaurantes.models import Restaurante, UsuarioRestaurante
 from usuarios.models import Usuario
 
-from .models import Plan, Suscripcion
+from .models import Pago, Plan, Suscripcion
 
 
 class SuscripcionesTests(APITestCase):
@@ -111,3 +112,120 @@ class SuscripcionesTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch("suscripciones.views.crear_checkout_plan")
+    def test_admin_puede_crear_checkout_mercadopago(self, crear_checkout_plan):
+        crear_checkout_plan.return_value = {
+            "id": "plan-remoto-123",
+            "status": "active",
+            "init_point": "https://www.mercadopago.com.mx/subscriptions/checkout",
+        }
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.post(
+            "/api/suscripciones/mercadopago/crear/",
+            {"plan_id": self.profesional.id},
+            format="json",
+            **self.headers(self.restaurante_uno),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            response.data["checkout_url"],
+            "https://www.mercadopago.com.mx/subscriptions/checkout",
+        )
+        self.suscripcion_uno.refresh_from_db()
+        self.assertEqual(self.suscripcion_uno.plan, self.profesional)
+        self.assertEqual(self.suscripcion_uno.proveedor, Suscripcion.PROVEEDOR_MERCADOPAGO)
+        self.assertEqual(self.suscripcion_uno.proveedor_suscripcion_id, "plan-remoto-123")
+        self.assertEqual(self.suscripcion_uno.estado_pago, Suscripcion.ESTADO_PENDIENTE)
+
+    def test_plan_gratuito_no_crea_checkout(self):
+        gratis = Plan.objects.create(
+            nombre="Gratis",
+            precio="0.00",
+            limite_usuarios=2,
+            limite_sucursales=1,
+            limi_cajas=1,
+        )
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.post(
+            "/api/suscripciones/mercadopago/crear/",
+            {"plan_id": gratis.id},
+            format="json",
+            **self.headers(self.restaurante_uno),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn("checkout_url", response.data)
+        self.suscripcion_uno.refresh_from_db()
+        self.assertEqual(self.suscripcion_uno.plan, gratis)
+
+    @patch("suscripciones.views.verificar_firma_webhook", return_value=True)
+    @patch("suscripciones.views.obtener_pago")
+    def test_webhook_pago_aprobado_registra_pago_y_renueva(
+        self,
+        obtener_pago,
+        verificar_firma_webhook,
+    ):
+        self.suscripcion_uno.proveedor = Suscripcion.PROVEEDOR_MERCADOPAGO
+        self.suscripcion_uno.proveedor_suscripcion_id = "preapproval-123"
+        self.suscripcion_uno.estado_pago = Suscripcion.ESTADO_PENDIENTE
+        self.suscripcion_uno.save()
+        obtener_pago.return_value = {
+            "id": 987,
+            "status": "approved",
+            "transaction_amount": 599,
+            "currency_id": "MXN",
+            "date_approved": "2026-06-16T10:00:00-06:00",
+            "preapproval_id": "preapproval-123",
+        }
+
+        response = self.client.post(
+            "/api/suscripciones/mercadopago/webhook/",
+            {"type": "payment", "data": {"id": "987"}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.suscripcion_uno.refresh_from_db()
+        self.assertTrue(self.suscripcion_uno.activa)
+        self.assertEqual(self.suscripcion_uno.estado_pago, Suscripcion.ESTADO_AUTORIZADA)
+        self.assertEqual(Pago.objects.count(), 1)
+
+        self.client.post(
+            "/api/suscripciones/mercadopago/webhook/",
+            {"type": "payment", "data": {"id": "987"}},
+            format="json",
+        )
+        self.assertEqual(Pago.objects.count(), 1)
+        self.assertTrue(verificar_firma_webhook.called)
+
+    @patch("suscripciones.views.verificar_firma_webhook", return_value=True)
+    @patch("suscripciones.views.obtener_preaprobacion")
+    def test_webhook_preaprobacion_cancelada_desactiva(
+        self,
+        obtener_preaprobacion,
+        verificar_firma_webhook,
+    ):
+        self.suscripcion_uno.proveedor = Suscripcion.PROVEEDOR_MERCADOPAGO
+        self.suscripcion_uno.proveedor_suscripcion_id = "preapproval-123"
+        self.suscripcion_uno.estado_pago = Suscripcion.ESTADO_AUTORIZADA
+        self.suscripcion_uno.save()
+        obtener_preaprobacion.return_value = {
+            "id": "preapproval-123",
+            "status": "cancelled",
+        }
+
+        response = self.client.post(
+            "/api/suscripciones/mercadopago/webhook/",
+            {"type": "subscription_preapproval", "data": {"id": "preapproval-123"}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.suscripcion_uno.refresh_from_db()
+        self.assertFalse(self.suscripcion_uno.activa)
+        self.assertEqual(self.suscripcion_uno.estado_pago, Suscripcion.ESTADO_CANCELADA)
+        verificar_firma_webhook.assert_called_once()
