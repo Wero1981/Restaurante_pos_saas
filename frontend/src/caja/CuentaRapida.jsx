@@ -15,7 +15,7 @@ import { formatCurrency } from '../lib/ticketPrinter';
 import { obtenerNombreRestauranteLocal } from '../lib/restaurante';
 
 
-export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
+export default function CuentaRapida({ cajaActual, onCancelar, onVentaExitosa }) {
   const [categorias, setCategorias] = useState([]);
   const [productos, setProductos] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null);
@@ -272,7 +272,8 @@ export default function CuentaRapida({ onCancelar, onVentaExitosa }) {
       const ventaData = {
         total: calcularTotal(),
         metodo_pago: metodoPago,
-        detalles: detalles
+        detalles: detalles,
+        caja: cajaActual.id,
       };
 
       const respuesta = await api.post('/ventas/', ventaData);

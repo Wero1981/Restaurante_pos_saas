@@ -22,7 +22,7 @@ class RegistroUsuarioTests(APITestCase):
             precio="0.00",
             limite_usuarios=5,
             limite_sucursales=1,
-            limi_cajas=1,
+            limite_cajas=1,
         )
         self.payload = {
             "email": "nuevo-admin@example.com",
@@ -128,7 +128,7 @@ class GoogleLoginTests(APITestCase):
             precio="0.00",
             limite_usuarios=5,
             limite_sucursales=1,
-            limi_cajas=1,
+            limite_cajas=1,
         )
         self.google_data = {
             "sub": "google-user-123",

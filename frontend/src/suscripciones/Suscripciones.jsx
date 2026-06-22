@@ -35,6 +35,7 @@ export default function Suscripciones() {
   const { restauranteActivo } = usePOS();
   const [planes, setPlanes] = useState([]);
   const [suscripcion, setSuscripcion] = useState(null);
+  const [uso, setUso] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [seleccionando, setSeleccionando] = useState(null);
   const [pagando, setPagando] = useState(null);
@@ -52,12 +53,14 @@ export default function Suscripciones() {
     setCargando(true);
     setError('');
     try {
-      const [planesResponse, suscripcionResponse] = await Promise.all([
+      const [planesResponse, suscripcionResponse, usoResponse] = await Promise.all([
         api.get('/suscripciones/planes/'),
         api.get('/suscripciones/actual/'),
+        api.get('/suscripciones/uso/'),
       ]);
       setPlanes(Array.isArray(planesResponse.data) ? planesResponse.data : []);
       setSuscripcion(suscripcionResponse.data || null);
+      setUso(usoResponse.data || null);
     } catch (requestError) {
       console.error('Error cargando suscripción:', requestError);
       setError(
@@ -200,7 +203,24 @@ export default function Suscripciones() {
             {suscripcion?.en_periodo_prueba && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 flex items-center gap-3 text-blue-800">
                 <CalendarDays className="w-5 h-5 shrink-0" />
-                Estás usando los 15 días gratuitos. Seleccionar otro plan no reinicia la prueba.
+                Prueba de 15 días: 1 restaurante, 4 empleados por restaurante y 1 caja abierta.
+              </div>
+            )}
+
+            {uso && (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="border-l-4 border-orange-500 bg-white p-4 shadow-sm">
+                  <p className="text-sm text-gray-500">Restaurantes activos</p>
+                  <p className="text-xl font-bold">{uso.restaurantes.usados} / {uso.restaurantes.limite}</p>
+                </div>
+                <div className="border-l-4 border-green-600 bg-white p-4 shadow-sm">
+                  <p className="text-sm text-gray-500">Empleados en este restaurante</p>
+                  <p className="text-xl font-bold">{uso.usuarios.usados} / {uso.usuarios.limite}</p>
+                </div>
+                <div className="border-l-4 border-blue-600 bg-white p-4 shadow-sm">
+                  <p className="text-sm text-gray-500">Cajas abiertas</p>
+                  <p className="text-xl font-bold">{uso.cajas.abiertas} / {uso.cajas.limite}</p>
+                </div>
               </div>
             )}
 
@@ -233,15 +253,15 @@ export default function Suscripciones() {
                       <div className="space-y-3 text-sm text-gray-700">
                         <p className="flex items-center gap-2">
                           <Users className="w-4 h-4 text-orange-500" />
-                          Hasta {plan.limite_usuarios} usuarios
+                          Hasta {plan.limite_usuarios} empleados por restaurante
                         </p>
                         <p className="flex items-center gap-2">
                           <Store className="w-4 h-4 text-orange-500" />
-                          {plan.limite_sucursales} sucursal(es)
+                          {plan.limite_sucursales} restaurante(s), matriz incluida
                         </p>
                         <p className="flex items-center gap-2">
                           <CreditCard className="w-4 h-4 text-orange-500" />
-                          {plan.limi_cajas} caja(s)
+                          {plan.limite_cajas} caja(s) abierta(s) por restaurante
                         </p>
                       </div>
                       <Button

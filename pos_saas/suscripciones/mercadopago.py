@@ -39,9 +39,10 @@ def _request(method, path, **kwargs):
     return response.json()
 
 
-def crear_plan_remoto(plan):
+def crear_checkout_plan(plan, suscripcion):
     payload = {
-        "reason": plan.nombre,
+        "reason": f"{plan.nombre} - {suscripcion.usuario_principal.email}",
+        "external_reference": str(suscripcion.id),
         "auto_recurring": {
             "frequency": 1,
             "frequency_type": "months",
@@ -51,61 +52,6 @@ def crear_plan_remoto(plan):
         "back_url": obtener_url_retorno(),
     }
     return _request("POST", "/preapproval_plan", json=payload)
-
-
-def crear_checkout_plan(plan, restaurante):
-    payload = {
-        "reason": f"{plan.nombre} - {restaurante.nombre}",
-        "external_reference": str(restaurante.id),
-        "auto_recurring": {
-            "frequency": 1,
-            "frequency_type": "months",
-            "transaction_amount": float(Decimal(plan.precio)),
-            "currency_id": "MXN",
-        },
-        "back_url": obtener_url_retorno(),
-    }
-    return _request("POST", "/preapproval_plan", json=payload)
-
-
-def crear_preaprobacion(plan, restaurante, user_email):
-    if not plan.mercadopago_plan_id:
-        plan_remoto = crear_plan_remoto(plan)
-        plan.mercadopago_plan_id = plan_remoto["id"]
-        plan.save(update_fields=["mercadopago_plan_id"])
-
-    return _crear_preaprobacion_con_plan(plan, restaurante, user_email)
-
-
-def _crear_preaprobacion_con_plan(plan, restaurante, user_email):
-    payload = {
-        "preapproval_plan_id": plan.mercadopago_plan_id,
-        "payer_email": user_email,
-        "external_reference": str(restaurante.id),
-        "back_url": obtener_url_retorno(),
-        "status": "pending",
-        "reason": f"{plan.nombre} - {restaurante.nombre}",
-    }
-
-    if settings.BACKEND_URL:
-        payload["notification_url"] = (
-            f"{settings.BACKEND_URL.rstrip('/')}"
-            "/api/suscripciones/mercadopago/webhook/"
-        )
-
-    try:
-        return _request("POST", "/preapproval", json=payload)
-    except MercadoPagoError as error:
-        if "template with id" not in str(error) or "does not exist" not in str(error):
-            raise
-
-    plan.mercadopago_plan_id = ""
-    plan.save(update_fields=["mercadopago_plan_id"])
-    plan_remoto = crear_plan_remoto(plan)
-    plan.mercadopago_plan_id = plan_remoto["id"]
-    plan.save(update_fields=["mercadopago_plan_id"])
-    payload["preapproval_plan_id"] = plan.mercadopago_plan_id
-    return _request("POST", "/preapproval", json=payload)
 
 
 def obtener_url_retorno():

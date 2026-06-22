@@ -13,7 +13,10 @@ from rest_framework.views import APIView
 
 from core.permissions import EsAdmin
 from core.restaurantes import get_restaurante_request
+from caja.models import Caja
+from restaurantes.models import Restaurante, UsuarioRestaurante
 
+from .limites import obtener_limites_efectivos, obtener_suscripcion
 from .mercadopago import (
     MercadoPagoError,
     crear_checkout_plan,
@@ -44,28 +47,53 @@ class SuscripcionActualView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        suscripcion = (
-            Suscripcion.objects.filter(restaurante=restaurante)
-            .select_related("plan", "restaurante")
-            .first()
-        )
-        if not suscripcion:
-            plan = Plan.objects.filter(nombre="Basico").order_by("id").first()
-            if not plan:
-                plan = Plan.objects.create(
-                    nombre="Basico",
-                    precio="0.00",
-                    limite_usuarios=5,
-                    limite_sucursales=1,
-                    limi_cajas=1,
-                )
-            suscripcion = Suscripcion.objects.create(
-                restaurante=restaurante,
-                plan=plan,
-                vence=timezone.localdate() + timedelta(days=15),
-            )
+        suscripcion = obtener_o_crear_suscripcion(restaurante)
 
         return Response(SuscripcionSerializer(suscripcion).data)
+
+
+class UsoSuscripcionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        restaurante = get_restaurante_request(request)
+        if not restaurante:
+            return Response(
+                {"detail": "Selecciona un restaurante válido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        suscripcion = obtener_suscripcion(restaurante)
+        limites = obtener_limites_efectivos(suscripcion)
+        principal = restaurante.propietario
+        return Response({
+            "tipo": (
+                "plan"
+                if suscripcion.estado_pago == Suscripcion.ESTADO_AUTORIZADA
+                else "prueba"
+            ),
+            "restaurantes": {
+                "usados": Restaurante.objects.filter(
+                    propietario=principal,
+                    activo=True,
+                ).count(),
+                "limite": limites["restaurantes"],
+            },
+            "usuarios": {
+                "usados": UsuarioRestaurante.objects.filter(
+                    restaurante=restaurante,
+                    activo=True,
+                ).exclude(usuario=principal).count(),
+                "limite": limites["usuarios"],
+            },
+            "cajas": {
+                "abiertas": Caja.objects.filter(
+                    restaurante=restaurante,
+                    abierta=True,
+                ).count(),
+                "limite": limites["cajas"],
+            },
+        })
 
 
 class SeleccionarPlanView(APIView):
@@ -89,15 +117,19 @@ class SeleccionarPlanView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        suscripcion, _ = Suscripcion.objects.get_or_create(
-            restaurante=restaurante,
-            defaults={
-                "plan": plan,
-                "vence": timezone.localdate() + timedelta(days=15),
-            },
-        )
+        suscripcion = obtener_o_crear_suscripcion(restaurante, plan)
+        if Decimal(plan.precio) > Decimal("0"):
+            return Response(
+                {"detail": "Los planes de pago deben contratarse mediante Mercado Pago."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         suscripcion.plan = plan
-        suscripcion.save(update_fields=["plan"])
+        suscripcion.plan_pendiente = None
+        suscripcion.activa = True
+        suscripcion.estado_pago = Suscripcion.ESTADO_AUTORIZADA
+        suscripcion.save(
+            update_fields=["plan", "plan_pendiente", "activa", "estado_pago"]
+        )
 
         return Response(
             {
@@ -116,11 +148,11 @@ def obtener_o_crear_suscripcion(restaurante, plan=None):
                 precio="0.00",
                 limite_usuarios=5,
                 limite_sucursales=1,
-                limi_cajas=1,
+                limite_cajas=1,
             )
 
     suscripcion, _ = Suscripcion.objects.get_or_create(
-        restaurante=restaurante,
+        usuario_principal=restaurante.propietario,
         defaults={
             "plan": plan,
             "vence": timezone.localdate() + timedelta(days=15),
@@ -155,9 +187,12 @@ class CrearSuscripcionMercadoPagoView(APIView):
 
         if Decimal(plan.precio) <= Decimal("0"):
             suscripcion.plan = plan
+            suscripcion.plan_pendiente = None
             suscripcion.activa = True
-            suscripcion.estado_pago = Suscripcion.ESTADO_TRIAL
-            suscripcion.save(update_fields=["plan", "activa", "estado_pago"])
+            suscripcion.estado_pago = Suscripcion.ESTADO_AUTORIZADA
+            suscripcion.save(
+                update_fields=["plan", "plan_pendiente", "activa", "estado_pago"]
+            )
             return Response(
                 {
                     "detail": "Plan gratuito seleccionado.",
@@ -166,20 +201,20 @@ class CrearSuscripcionMercadoPagoView(APIView):
             )
 
         try:
-            checkout = crear_checkout_plan(plan, restaurante)
+            checkout = crear_checkout_plan(plan, suscripcion)
         except MercadoPagoError as error:
             return Response(
                 {"detail": str(error)},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        suscripcion.plan = plan
+        suscripcion.plan_pendiente = plan
         suscripcion.proveedor = Suscripcion.PROVEEDOR_MERCADOPAGO
         suscripcion.proveedor_suscripcion_id = checkout["id"]
         suscripcion.estado_pago = Suscripcion.ESTADO_PENDIENTE
         suscripcion.save(
             update_fields=[
-                "plan",
+                "plan_pendiente",
                 "proveedor",
                 "proveedor_suscripcion_id",
                 "estado_pago",
@@ -251,7 +286,7 @@ class MercadoPagoWebhookView(APIView):
             ).first()
         if not suscripcion and preaprobacion.get("external_reference"):
             suscripcion = Suscripcion.objects.filter(
-                restaurante_id=preaprobacion["external_reference"],
+                id=preaprobacion["external_reference"],
             ).first()
         if not suscripcion:
             return
@@ -260,16 +295,19 @@ class MercadoPagoWebhookView(APIView):
         suscripcion.proveedor_suscripcion_id = preapproval_id
         suscripcion.estado_pago = estado
         suscripcion.activa = estado == Suscripcion.ESTADO_AUTORIZADA
+        update_fields = [
+            "proveedor_suscripcion_id",
+            "estado_pago",
+            "activa",
+            "cancelar_al_final",
+        ]
+        if estado == Suscripcion.ESTADO_AUTORIZADA and suscripcion.plan_pendiente:
+            suscripcion.plan = suscripcion.plan_pendiente
+            suscripcion.plan_pendiente = None
+            update_fields.extend(["plan", "plan_pendiente"])
         if estado in {Suscripcion.ESTADO_CANCELADA, Suscripcion.ESTADO_PAUSADA}:
             suscripcion.cancelar_al_final = estado == Suscripcion.ESTADO_CANCELADA
-        suscripcion.save(
-            update_fields=[
-                "proveedor_suscripcion_id",
-                "estado_pago",
-                "activa",
-                "cancelar_al_final",
-            ]
-        )
+        suscripcion.save(update_fields=update_fields)
 
     @transaction.atomic
     def _procesar_pago(self, payment_id):
@@ -290,7 +328,7 @@ class MercadoPagoWebhookView(APIView):
 
         if not suscripcion and pago_remoto.get("external_reference"):
             suscripcion = Suscripcion.objects.filter(
-                restaurante_id=pago_remoto["external_reference"]
+                id=pago_remoto["external_reference"]
             ).first()
 
         if not suscripcion:
@@ -312,7 +350,12 @@ class MercadoPagoWebhookView(APIView):
         suscripcion.activa = True
         suscripcion.estado_pago = Suscripcion.ESTADO_AUTORIZADA
         suscripcion.vence = timezone.localdate() + timedelta(days=30)
-        suscripcion.save(update_fields=["activa", "estado_pago", "vence"])
+        update_fields = ["activa", "estado_pago", "vence"]
+        if suscripcion.plan_pendiente:
+            suscripcion.plan = suscripcion.plan_pendiente
+            suscripcion.plan_pendiente = None
+            update_fields.extend(["plan", "plan_pendiente"])
+        suscripcion.save(update_fields=update_fields)
 
 
 class MercadoPagoRetornoView(APIView):

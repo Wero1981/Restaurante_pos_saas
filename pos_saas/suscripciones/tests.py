@@ -28,6 +28,7 @@ class SuscripcionesTests(APITestCase):
             direccion="Direccion 1",
             telefono="1111111111",
             propietario=self.admin,
+            es_matriz=True,
         )
         self.restaurante_dos = Restaurante.objects.create(
             nombre="Restaurante Dos",
@@ -45,17 +46,17 @@ class SuscripcionesTests(APITestCase):
             precio="299.00",
             limite_usuarios=5,
             limite_sucursales=1,
-            limi_cajas=1,
+            limite_cajas=1,
         )
         self.profesional = Plan.objects.create(
             nombre="Profesional Test",
             precio="599.00",
             limite_usuarios=15,
             limite_sucursales=3,
-            limi_cajas=3,
+            limite_cajas=3,
         )
         self.suscripcion_uno = Suscripcion.objects.create(
-            restaurante=self.restaurante_uno,
+            usuario_principal=self.admin,
             plan=self.basico,
             vence=timezone.localdate() + timedelta(days=15),
         )
@@ -75,7 +76,7 @@ class SuscripcionesTests(APITestCase):
         self.assertEqual(response.data["dias_restantes"], 15)
         self.assertTrue(response.data["en_periodo_prueba"])
 
-    def test_suscripcion_se_filtra_por_restaurante_activo(self):
+    def test_sucursal_comparte_suscripcion_del_principal(self):
         self.client.force_authenticate(self.admin)
 
         response = self.client.get(
@@ -84,10 +85,9 @@ class SuscripcionesTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["restaurante"], self.restaurante_dos.nombre)
-        self.assertNotEqual(response.data["id"], self.suscripcion_uno.id)
+        self.assertEqual(response.data["id"], self.suscripcion_uno.id)
 
-    def test_admin_puede_seleccionar_plan_sin_extender_prueba(self):
+    def test_plan_pago_requiere_checkout(self):
         self.client.force_authenticate(self.admin)
         vencimiento_original = self.suscripcion_uno.vence
 
@@ -98,9 +98,9 @@ class SuscripcionesTests(APITestCase):
             **self.headers(self.restaurante_uno),
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.suscripcion_uno.refresh_from_db()
-        self.assertEqual(self.suscripcion_uno.plan, self.profesional)
+        self.assertEqual(self.suscripcion_uno.plan, self.basico)
         self.assertEqual(self.suscripcion_uno.vence, vencimiento_original)
 
     def test_gerente_no_puede_consultar_planes(self):
@@ -135,7 +135,8 @@ class SuscripcionesTests(APITestCase):
             "https://www.mercadopago.com.mx/subscriptions/checkout",
         )
         self.suscripcion_uno.refresh_from_db()
-        self.assertEqual(self.suscripcion_uno.plan, self.profesional)
+        self.assertEqual(self.suscripcion_uno.plan, self.basico)
+        self.assertEqual(self.suscripcion_uno.plan_pendiente, self.profesional)
         self.assertEqual(self.suscripcion_uno.proveedor, Suscripcion.PROVEEDOR_MERCADOPAGO)
         self.assertEqual(self.suscripcion_uno.proveedor_suscripcion_id, "plan-remoto-123")
         self.assertEqual(self.suscripcion_uno.estado_pago, Suscripcion.ESTADO_PENDIENTE)
@@ -146,7 +147,7 @@ class SuscripcionesTests(APITestCase):
             precio="0.00",
             limite_usuarios=2,
             limite_sucursales=1,
-            limi_cajas=1,
+            limite_cajas=1,
         )
         self.client.force_authenticate(self.admin)
 
@@ -172,6 +173,7 @@ class SuscripcionesTests(APITestCase):
         self.suscripcion_uno.proveedor = Suscripcion.PROVEEDOR_MERCADOPAGO
         self.suscripcion_uno.proveedor_suscripcion_id = "preapproval-123"
         self.suscripcion_uno.estado_pago = Suscripcion.ESTADO_PENDIENTE
+        self.suscripcion_uno.plan_pendiente = self.profesional
         self.suscripcion_uno.save()
         obtener_pago.return_value = {
             "id": 987,
@@ -192,6 +194,8 @@ class SuscripcionesTests(APITestCase):
         self.suscripcion_uno.refresh_from_db()
         self.assertTrue(self.suscripcion_uno.activa)
         self.assertEqual(self.suscripcion_uno.estado_pago, Suscripcion.ESTADO_AUTORIZADA)
+        self.assertEqual(self.suscripcion_uno.plan, self.profesional)
+        self.assertIsNone(self.suscripcion_uno.plan_pendiente)
         self.assertEqual(Pago.objects.count(), 1)
 
         self.client.post(

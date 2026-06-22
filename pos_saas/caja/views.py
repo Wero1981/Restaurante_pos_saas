@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -8,6 +9,8 @@ from .serializers import CajaSerializer, MovimientoCajaSerializer
 from .models import Caja, MovimientoCaja
 from .services import obtener_resumen_caja
 from core.restaurantes import get_restaurante_request
+from restaurantes.models import Restaurante
+from suscripciones.limites import obtener_limites_efectivos, obtener_suscripcion
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 @extend_schema_view(
     list=extend_schema(
@@ -74,12 +77,23 @@ class CajaViewSet(ModelViewSet):
             return queryset.filter(abierta=True).order_by('-fecha_apertura')
         return queryset.order_by('-fecha_apertura')
 
+    @transaction.atomic
     def perform_create(self, serializer):
         restaurante = get_restaurante_request(self.request)
         if not restaurante:
             raise ValidationError('Selecciona un restaurante válido antes de abrir la caja.')
-        if Caja.objects.filter(restaurante=restaurante, abierta=True).exists():
-            raise ValidationError('Ya existe una caja abierta para este restaurante.')
+
+        Restaurante.objects.select_for_update().get(pk=restaurante.pk)
+        suscripcion = obtener_suscripcion(restaurante)
+        limites = obtener_limites_efectivos(suscripcion)
+        abiertas = Caja.objects.filter(restaurante=restaurante, abierta=True).count()
+        if abiertas >= limites['cajas']:
+            raise ValidationError({
+                'detail': 'Alcanzaste el límite de cajas abiertas del restaurante.',
+                'codigo': 'LIMITE_CAJAS',
+                'limite': limites['cajas'],
+                'abiertas': abiertas,
+            })
         serializer.save(
             restaurante=restaurante,
             usuario=self.request.user,

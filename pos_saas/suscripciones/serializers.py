@@ -12,7 +12,7 @@ class PlanSerializer(serializers.ModelSerializer):
             "precio",
             "limite_usuarios",
             "limite_sucursales",
-            "limi_cajas",
+            "limite_cajas",
             "mercadopago_plan_id",
         ]
 
@@ -34,7 +34,11 @@ class PagoSerializer(serializers.ModelSerializer):
 
 class SuscripcionSerializer(serializers.ModelSerializer):
     plan = PlanSerializer(read_only=True)
-    restaurante = serializers.CharField(source="restaurante.nombre", read_only=True)
+    plan_pendiente = PlanSerializer(read_only=True)
+    usuario_principal_email = serializers.EmailField(
+        source="usuario_principal.email",
+        read_only=True,
+    )
     dias_restantes = serializers.IntegerField(read_only=True)
     esta_vencida = serializers.BooleanField(read_only=True)
     en_periodo_prueba = serializers.BooleanField(read_only=True)
@@ -43,8 +47,10 @@ class SuscripcionSerializer(serializers.ModelSerializer):
         model = Suscripcion
         fields = [
             "id",
-            "restaurante",
+            "usuario_principal",
+            "usuario_principal_email",
             "plan",
+            "plan_pendiente",
             "activa",
             "inicio",
             "vence",

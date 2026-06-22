@@ -10,7 +10,7 @@ class PlanAdmin(admin.ModelAdmin):
         "precio",
         "limite_usuarios",
         "limite_sucursales",
-        "limi_cajas",
+        "limite_cajas",
         "activo",
     )
     list_filter = ("activo",)
@@ -18,6 +18,6 @@ class PlanAdmin(admin.ModelAdmin):
 
 @admin.register(Suscripcion)
 class SuscripcionAdmin(admin.ModelAdmin):
-    list_display = ("restaurante", "plan", "inicio", "vence", "activa")
+    list_display = ("usuario_principal", "plan", "inicio", "vence", "activa")
     list_filter = ("activa", "plan")
-    search_fields = ("restaurante__nombre",)
+    search_fields = ("usuario_principal__email", "usuario_principal__nombre")

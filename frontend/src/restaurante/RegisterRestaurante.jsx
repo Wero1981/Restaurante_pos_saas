@@ -79,7 +79,7 @@ export default function RegisterRestaurante() {
         
         
         try {
-            if(state.esNuevo){
+            if(state?.esNuevo){
 
                  await api.post('/restaurantes/', data);
                     setOpen(true);
@@ -89,7 +89,12 @@ export default function RegisterRestaurante() {
             }
         } catch (error) {
             console.error("Registration failed:", error);
-            setError(error.response?.data?.message || "Error al registrar el restaurante");
+            const detail = error.response?.data?.detail;
+            setError(
+                typeof detail === 'string'
+                    ? detail
+                    : error.response?.data?.message || "Error al registrar el restaurante"
+            );
         } finally {
             setLoading(false);
         }

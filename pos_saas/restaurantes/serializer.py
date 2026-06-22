@@ -11,7 +11,7 @@ class PermisoSerializer(serializers.ModelSerializer):
         fields = ['id', 'codigo', 'descripcion']
 
 class RestauranteSerializer(serializers.ModelSerializer):
-    
+
     configuracion = ConfiguracionSerializer(source='configuracion_set.first', read_only=True)
    
     #Enviar los datos de configuracion junto con el restaurante
@@ -24,9 +24,26 @@ class RestauranteSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'nombre', 'direccion', 'slug', 'telefono', 'ciudad', 'estado', 'email', 'sitio_web',
             'propietario', 'activo', 'created_at', 'configuracion',
-            'tipo_moneda', 'descripcion', 'logo'
+            'tipo_moneda', 'descripcion', 'logo', 'es_matriz'
         ]
-        #read_only_fields = ['id', 'propietario', 'activo', 'created_at', 'configuracion']
+        read_only_fields = [
+            'id', 'propietario', 'activo', 'es_matriz',
+            'created_at', 'configuracion'
+        ]
+
+    def create(self, validated_data):
+        config_data = {
+            'tipo_moneda': validated_data.pop('tipo_moneda', None),
+            'descripcion': validated_data.pop('descripcion', None),
+            'logo': validated_data.pop('logo', None),
+        }
+        restaurante = Restaurante.objects.create(**validated_data)
+        if any(value is not None for value in config_data.values()):
+            Configuracion.objects.create(
+                restaurante=restaurante,
+                **{key: value for key, value in config_data.items() if value is not None},
+            )
+        return restaurante
 
     def update(self, instance, validated_data):
         # Extraer los datos de configuración si existen
@@ -80,4 +97,3 @@ class UsuarioRestauranteSerializer(serializers.ModelSerializer):
             'created_at'
         ]
         read_only_fields = ['id', 'usuario', 'created_at']
-    

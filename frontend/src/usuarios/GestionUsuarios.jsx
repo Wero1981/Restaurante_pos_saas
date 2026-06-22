@@ -21,6 +21,7 @@ export default function GestionUsuarios() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editando, setEditando] = useState(null);
   const [permisos, setPermisos] = useState([]);
+  const [uso, setUso] = useState(null);
   const [usuarioForm, setUsuarioForm] = useState({
     email: '',
     nombre: '',
@@ -74,8 +75,12 @@ export default function GestionUsuarios() {
     }
 
     try {
-      const res = await api.get('/restaurantes/usuarios/');
+      const [res, usoRes] = await Promise.all([
+        api.get('/restaurantes/usuarios/'),
+        api.get('/suscripciones/uso/'),
+      ]);
       setUsuarios(Array.isArray(res.data) ? res.data : []);
+      setUso(usoRes.data || null);
     } catch (error) {
       console.error('Error cargando usuarios:', error);
       setUsuarios([]);
@@ -96,14 +101,16 @@ export default function GestionUsuarios() {
       }
 
       try {
-        const [usuariosResponse, permisosResponse] = await Promise.all([
+        const [usuariosResponse, permisosResponse, usoResponse] = await Promise.all([
           api.get('/restaurantes/usuarios/'),
           api.get('/restaurantes/permisos/'),
+          api.get('/suscripciones/uso/'),
         ]);
 
         if (!cancelado) {
           setUsuarios(Array.isArray(usuariosResponse.data) ? usuariosResponse.data : []);
           setPermisos(Array.isArray(permisosResponse.data) ? permisosResponse.data : []);
+          setUso(usoResponse.data || null);
         }
       } catch (error) {
         console.error('Error cargando gestión de usuarios:', error);
@@ -184,8 +191,9 @@ export default function GestionUsuarios() {
       });
     } catch (error) {
       console.error('Error guardando usuario:', error);
-      const errorMsg = error.response?.data?.email?.[0] || 
-                       error.response?.data?.detail ||
+      const detail = error.response?.data?.detail;
+      const errorMsg = error.response?.data?.email?.[0] ||
+                       (typeof detail === 'string' ? detail : null) ||
                        'Error al guardar usuario';
       Swal.fire({
         icon: 'error',
@@ -336,7 +344,13 @@ export default function GestionUsuarios() {
               />
             </div>
             
-            <Button onClick={abrirDialogNuevo} disabled={!restauranteActivo?.id}>
+            <Button
+              onClick={abrirDialogNuevo}
+              disabled={
+                !restauranteActivo?.id ||
+                (uso && uso.usuarios.usados >= uso.usuarios.limite)
+              }
+            >
               <Plus className="w-4 h-4 mr-2" />
               Nuevo Usuario
             </Button>

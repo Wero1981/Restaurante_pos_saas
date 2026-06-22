@@ -1,7 +1,11 @@
+from datetime import timedelta
+
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from usuarios.models import Usuario
+from suscripciones.models import Plan, Suscripcion
 
 from .models import Permiso, Restaurante, UsuarioRestaurante
 
@@ -111,3 +115,88 @@ class GestionUsuariosSoloAdminTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.relacion_uno.refresh_from_db()
         self.assertEqual(self.relacion_uno.rol, UsuarioRestaurante.MESERO)
+
+
+class LimitesPlanRestauranteTests(APITestCase):
+    def setUp(self):
+        self.principal = Usuario.objects.create_user(
+            email="principal-limites-restaurante@example.com",
+            nombre="Principal",
+            password="test-password",
+        )
+        self.matriz = Restaurante.objects.create(
+            nombre="Matriz Límites",
+            direccion="Dirección",
+            telefono="1111111111",
+            propietario=self.principal,
+            es_matriz=True,
+        )
+        UsuarioRestaurante.objects.create(
+            usuario=self.principal,
+            restaurante=self.matriz,
+            rol=UsuarioRestaurante.ADMIN,
+        )
+        self.plan = Plan.objects.create(
+            nombre="Plan límites restaurante",
+            precio="599.00",
+            limite_usuarios=6,
+            limite_sucursales=3,
+            limite_cajas=3,
+        )
+        self.suscripcion = Suscripcion.objects.create(
+            usuario_principal=self.principal,
+            plan=self.plan,
+            vence=timezone.localdate() + timedelta(days=15),
+        )
+        self.client.force_authenticate(self.principal)
+        self.headers = {"HTTP_X_RESTAURANTE_ID": str(self.matriz.id)}
+
+    def test_prueba_no_permite_crear_sucursal(self):
+        response = self.client.post(
+            "/api/restaurantes/",
+            {"nombre": "Sucursal", "direccion": "Dirección", "telefono": "222"},
+            format="json",
+            **self.headers,
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_plan_autorizado_permite_crear_sucursal(self):
+        self.suscripcion.estado_pago = Suscripcion.ESTADO_AUTORIZADA
+        self.suscripcion.save(update_fields=["estado_pago"])
+
+        response = self.client.post(
+            "/api/restaurantes/",
+            {"nombre": "Sucursal", "direccion": "Dirección", "telefono": "222"},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(Restaurante.objects.get(id=response.data["id"]).es_matriz)
+
+    def test_prueba_limita_a_cuatro_empleados(self):
+        for numero in range(4):
+            empleado = Usuario.objects.create_user(
+                email=f"empleado-{numero}@example.com",
+                nombre=f"Empleado {numero}",
+                password="test-password",
+            )
+            UsuarioRestaurante.objects.create(
+                usuario=empleado,
+                restaurante=self.matriz,
+                rol=UsuarioRestaurante.MESERO,
+            )
+
+        response = self.client.post(
+            "/api/restaurantes/usuarios/",
+            {
+                "email": "quinto",
+                "nombre": "Quinto",
+                "password": "test-password",
+                "rol": UsuarioRestaurante.MESERO,
+            },
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

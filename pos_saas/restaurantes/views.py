@@ -5,6 +5,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
+from rest_framework.exceptions import APIException, PermissionDenied
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
@@ -13,6 +14,11 @@ from .serializer import RestauranteSerializer, UsuarioRestauranteSerializer, Per
 from usuarios.models import Usuario
 from core.permissions import EsAdmin, TienePermisoRestaurante
 from core.restaurantes import get_restaurante_request
+from suscripciones.limites import (
+    obtener_limites_efectivos,
+    obtener_suscripcion,
+    obtener_suscripcion_principal,
+)
 
 
 def format_restaurant_email(restaurante, value):
@@ -96,6 +102,41 @@ class RestauranteViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Obtiene el restaurante asociado al usuario autenticado."""
         return Restaurante.objects.filter(propietario=self.request.user)
+
+    @transaction.atomic
+    def perform_create(self, serializer):
+        principal = self.request.user
+        if not Restaurante.objects.filter(
+            propietario=principal,
+            es_matriz=True,
+            activo=True,
+        ).exists():
+            raise PermissionDenied('Solo el usuario principal puede crear sucursales.')
+
+        suscripcion = obtener_suscripcion_principal(principal, bloquear=True)
+        limites = obtener_limites_efectivos(suscripcion)
+        usados = Restaurante.objects.filter(
+            propietario=principal,
+            activo=True,
+        ).count()
+        if usados >= limites['restaurantes']:
+            raise PermissionDenied({
+                'detail': 'Alcanzaste el límite de restaurantes de tu suscripción.',
+                'codigo': 'LIMITE_RESTAURANTES',
+                'limite': limites['restaurantes'],
+                'usados': usados,
+            })
+
+        sucursal = serializer.save(
+            propietario=principal,
+            es_matriz=False,
+            activo=True,
+        )
+        UsuarioRestaurante.objects.get_or_create(
+            usuario=principal,
+            restaurante=sucursal,
+            defaults={'rol': UsuarioRestaurante.ADMIN, 'activo': True},
+        )
     
     @extend_schema(summary="Completar datos del restaurante asociado al usuario autenticado.")
     def update(self, request, *args, **kwargs):
@@ -203,6 +244,21 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
         return UsuarioRestaurante.objects.filter(
             restaurante=restaurante
         ).select_related('usuario', 'restaurante')
+
+    def _validar_limite_usuarios(self, restaurante):
+        suscripcion = obtener_suscripcion(restaurante, bloquear=True)
+        limites = obtener_limites_efectivos(suscripcion)
+        usados = UsuarioRestaurante.objects.filter(
+            restaurante=restaurante,
+            activo=True,
+        ).exclude(usuario=restaurante.propietario).count()
+        if usados >= limites['usuarios']:
+            raise PermissionDenied({
+                'detail': 'Alcanzaste el límite de empleados del restaurante.',
+                'codigo': 'LIMITE_USUARIOS',
+                'limite': limites['usuarios'],
+                'usados': usados,
+            })
     
     def create(self, request, *args, **kwargs):
         """Crear un nuevo usuario para el restaurante."""
@@ -215,6 +271,7 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
         
         try:
             with transaction.atomic():
+                self._validar_limite_usuarios(restaurante)
                 email_normalizado = format_restaurant_email(restaurante, request.data.get('email'))
                 if not email_normalizado:
                     return Response(
@@ -256,6 +313,8 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(usuario_restaurante)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
                 
+        except APIException:
+            raise
         except Exception as e:
             return Response(
                 {'error': str(e)},
@@ -268,6 +327,8 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
         
         try:
             with transaction.atomic():
+                if request.data.get('activo') is True and not instance.activo:
+                    self._validar_limite_usuarios(instance.restaurante)
                 # Actualizar datos del usuario
                 usuario = instance.usuario
                 
@@ -313,6 +374,8 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(instance)
                 return Response(serializer.data)
                 
+        except APIException:
+            raise
         except Exception as e:
             return Response(
                 {'error': str(e)},

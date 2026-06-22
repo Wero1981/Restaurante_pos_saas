@@ -46,6 +46,8 @@ export default function Caja() {
   // Estados para caja
   const [cajaAbierta, setCajaAbierta] = useState(false);
   const [cajaActual, setCajaActual] = useState(null);
+  const [cajasAbiertas, setCajasAbiertas] = useState([]);
+  const [usoSuscripcion, setUsoSuscripcion] = useState(null);
   const [dialogAbrirCaja, setDialogAbrirCaja] = useState(false);
   const [montoInicial, setMontoInicial] = useState('');
   const [cargandoCaja, setCargandoCaja] = useState(true);
@@ -396,6 +398,8 @@ export default function Caja() {
   useEffect(() => {
     setCajaAbierta(false);
     setCajaActual(null);
+    setCajasAbiertas([]);
+    setUsoSuscripcion(null);
     setMesasConCuentas([]);
     setMesaSeleccionadaLocal(null);
     setPedidoMesa(null);
@@ -526,11 +530,16 @@ export default function Caja() {
         setCargandoCaja(false);
         return;
       }
-      const res = await api.get('/caja/cajas/');
+      const [res, usoRes] = await Promise.all([
+        api.get('/caja/cajas/'),
+        api.get('/suscripciones/uso/'),
+      ]);
+      const cajas = Array.isArray(res.data) ? res.data : [];
+      setCajasAbiertas(cajas);
+      setUsoSuscripcion(usoRes.data);
       
-      if (res.data && res.data.length > 0) {
-        setCajaActual(res.data[0]);
-        console.log('Caja abierta encontrada:', res.data[0]);
+      if (cajas.length > 0) {
+        setCajaActual((actual) => cajas.find((caja) => caja.id === actual?.id) || cajas[0]);
         setCajaAbierta(true);
       } else {
         setCajaAbierta(false);
@@ -576,7 +585,12 @@ export default function Caja() {
       console.log('Respuesta al abrir caja:', res.data);
 
       setCajaActual(res.data);
+      setCajasAbiertas((actuales) => [...actuales, res.data]);
       setCajaAbierta(true);
+      setUsoSuscripcion((actual) => actual ? {
+        ...actual,
+        cajas: { ...actual.cajas, abiertas: actual.cajas.abiertas + 1 },
+      } : actual);
       setDialogAbrirCaja(false);
       setMontoInicial('');
 
@@ -669,6 +683,7 @@ export default function Caja() {
       setMesasConCuentas([]);
       setMesaSeleccionadaLocal(null);
       setPedidoMesa(null);
+      await verificarCajaAbierta(restauranteSeleccionado);
 
       Swal.fire({
         icon: 'success',
@@ -770,7 +785,8 @@ export default function Caja() {
         const ventaData = {
           total: totalVenta,
           metodo_pago: metodoPago,
-          detalles: detallesVenta
+          detalles: detallesVenta,
+          caja: cajaActual.id,
         };
 
         const respuesta = await api.post('/ventas/', ventaData);
@@ -883,7 +899,8 @@ export default function Caja() {
       const ventaData = {
         total: totalVenta,
         metodo_pago: metodoPago,
-        detalles
+        detalles,
+        caja: cajaActual.id,
       };
 
       if (!pagoPorComensal) {
@@ -1288,6 +1305,7 @@ export default function Caja() {
   if (modoCuentaRapida) {
     return (
       <CuentaRapida
+        cajaActual={cajaActual}
         onCancelar={cancelarCuentaRapida}
         onVentaExitosa={() => {
           Swal.fire({
@@ -1305,6 +1323,34 @@ export default function Caja() {
 
   return (
     <div className="h-[calc(100vh-80px)] flex flex-col p-6">
+      <Dialog open={dialogAbrirCaja} onOpenChange={setDialogAbrirCaja}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Abrir otra caja</DialogTitle>
+            <DialogDescription>
+              Ingresa el fondo inicial para esta caja.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={montoInicial}
+              onChange={(event) => setMontoInicial(event.target.value)}
+              placeholder="0.00"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDialogAbrirCaja(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={abrirCaja} className="bg-orange-500 hover:bg-orange-600">
+                Abrir caja
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* Header con info de caja */}
       <div className="mb-6">
         <div className="flex justify-between items-start">
@@ -1426,12 +1472,41 @@ export default function Caja() {
                 <span className="font-semibold text-green-600">Caja Abierta</span>
               </div>
               <div className="text-sm text-gray-600 space-y-1">
+                {cajasAbiertas.length > 1 && (
+                  <select
+                    value={cajaActual?.id || ''}
+                    onChange={(event) => {
+                      const seleccionada = cajasAbiertas.find(
+                        (caja) => caja.id === Number(event.target.value)
+                      );
+                      if (seleccionada) setCajaActual(seleccionada);
+                    }}
+                    className="w-full rounded-md border border-gray-300 px-2 py-2 text-sm"
+                  >
+                    {cajasAbiertas.map((caja) => (
+                      <option key={caja.id} value={caja.id}>
+                        Caja #{caja.id} · {caja.usuario_nombre || 'Usuario'}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <p>Monto inicial: <span className="font-semibold">{formatearMonto(cajaActual?.monto_inicial)}</span></p>
                 <p className="text-xs text-gray-500">
                   {new Date(cajaActual?.fecha_apertura).toLocaleString('es-ES')}
                 </p>
               </div>            
               <div className='flex flex-row gap-2'>
+                {usoSuscripcion?.cajas?.abiertas < usoSuscripcion?.cajas?.limite && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setDialogAbrirCaja(true)}
+                    className="w-full mt-3"
+                    title="Abrir otra caja"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"

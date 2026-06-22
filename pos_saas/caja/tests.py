@@ -1,10 +1,13 @@
 from decimal import Decimal
+from datetime import timedelta
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from restaurantes.models import Restaurante
 from usuarios.models import Usuario
+from suscripciones.models import Plan, Suscripcion
 
 from .models import Caja, MovimientoCaja
 
@@ -21,6 +24,7 @@ class CajaPorRestauranteTests(APITestCase):
             direccion="Direccion 1",
             telefono="1111111111",
             propietario=self.admin,
+            es_matriz=True,
         )
         self.restaurante_dos = Restaurante.objects.create(
             nombre="Restaurante Dos",
@@ -37,6 +41,18 @@ class CajaPorRestauranteTests(APITestCase):
             restaurante=self.restaurante_dos,
             usuario=self.admin,
             monto_inicial=Decimal("200.00"),
+        )
+        self.plan = Plan.objects.create(
+            nombre="Plan cajas test",
+            precio="299.00",
+            limite_usuarios=5,
+            limite_sucursales=2,
+            limite_cajas=3,
+        )
+        self.suscripcion = Suscripcion.objects.create(
+            usuario_principal=self.admin,
+            plan=self.plan,
+            vence=timezone.localdate() + timedelta(days=15),
         )
         self.client.force_authenticate(self.admin)
 
@@ -82,6 +98,23 @@ class CajaPorRestauranteTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_plan_autorizado_permite_varias_cajas_hasta_limite(self):
+        self.suscripcion.estado_pago = Suscripcion.ESTADO_AUTORIZADA
+        self.suscripcion.save(update_fields=["estado_pago"])
+
+        response = self.client.post(
+            "/api/caja/cajas/",
+            {"monto_inicial": "50.00"},
+            format="json",
+            **self.headers(self.restaurante_dos),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            Caja.objects.filter(restaurante=self.restaurante_dos, abierta=True).count(),
+            2,
+        )
 
     def test_no_permite_cerrar_caja_de_otro_restaurante(self):
         response = self.client.post(

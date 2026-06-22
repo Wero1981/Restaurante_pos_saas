@@ -14,6 +14,7 @@ def crear_restaurante_para_usuario(user, restaurante_nombre):
         propietario=user,
         direccion='',
         telefono='',
+        es_matriz=True,
     )
 
     UsuarioRestaurante.objects.create(
@@ -29,12 +30,13 @@ def crear_restaurante_para_usuario(user, restaurante_nombre):
             precio='0.00',
             limite_usuarios=5,
             limite_sucursales=1,
-            limi_cajas=1,
+            limite_cajas=1,
         )
     Suscripcion.objects.create(
-        restaurante=restaurante,
+        usuario_principal=user,
         plan=plan,
         vence=timezone.localdate() + timedelta(days=15),
+        estado_pago=Suscripcion.ESTADO_TRIAL,
     )
 
     return restaurante

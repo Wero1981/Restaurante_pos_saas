@@ -13,6 +13,7 @@ export default function ListaRestaurantes() {
   const [restaurantes, setRestaurantes] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [loading, setLoading] = useState(true);
+  const [uso, setUso] = useState(null);
  const { seleccionarRestaurante } = usePOS();
 
   useEffect(() => {
@@ -22,8 +23,12 @@ export default function ListaRestaurantes() {
   const cargarRestaurantes = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/restaurantes/');
+      const [res, usoRes] = await Promise.all([
+        api.get('/restaurantes/'),
+        api.get('/suscripciones/uso/'),
+      ]);
       setRestaurantes(Array.isArray(res.data) ? res.data : []);
+      setUso(usoRes.data || null);
     } catch (error) {
       console.error('Error cargando restaurantes:', error);
       Swal.fire({
@@ -75,7 +80,11 @@ export default function ListaRestaurantes() {
             </h2>
             <p className="text-gray-600 mt-1">Administra la información de tus restaurantes</p>
           </div>
-          <Button onClick={() => navigate('/restaurante', {state:{ esNuevo: true }})} className="bg-orange-500 hover:bg-orange-600">
+          <Button
+            onClick={() => navigate('/restaurante', {state:{ esNuevo: true }})}
+            disabled={uso && uso.restaurantes.usados >= uso.restaurantes.limite}
+            className="bg-orange-500 hover:bg-orange-600"
+          >
             <Plus className="w-4 h-4 mr-2" />
             Nuevo Restaurante
           </Button>

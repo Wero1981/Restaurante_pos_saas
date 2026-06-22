@@ -21,6 +21,7 @@ class Restaurante(models.Model):
     propietario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
     activo = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    es_matriz = models.BooleanField(default=False)
 
     def __str__(self):
         return self.nombre

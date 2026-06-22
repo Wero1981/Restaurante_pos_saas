@@ -22,7 +22,7 @@ class VentaSerializer(serializers.ModelSerializer):
         required=False, 
         allow_null=True
     )
-    caja = serializers.PrimaryKeyRelatedField(read_only=True)
+    caja = serializers.PrimaryKeyRelatedField(queryset=Caja.objects.all())
     pedido_detalles_ids = serializers.ListField(
         child=serializers.IntegerField(),
         required=False,
@@ -32,29 +32,27 @@ class VentaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Venta
         fields = ['id', 'total', 'metodo_pago', 'detalles', 'pedido', 'caja', 'pedido_detalles_ids', 'created_at']
-        read_only_fields = ['id', 'caja', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
     def create(self, validated_data):
         detalles = validated_data.pop('detalles', [])
         pedido = validated_data.pop('pedido', None)
         pedido_detalles_ids = validated_data.pop('pedido_detalles_ids', [])
         total = validated_data.pop('total', Decimal('0.00'))
+        caja = validated_data.pop('caja')
         request = self.context['request']
         restaurante = get_restaurante_request(request)
 
-        caja_abierta = Caja.objects.filter(
-            restaurante=restaurante,
-            abierta=True
-        ).order_by('-fecha_apertura').first()
-
-        if not caja_abierta:
-            raise serializers.ValidationError('No hay una caja abierta para registrar la venta.')
+        if not restaurante or caja.restaurante_id != restaurante.id:
+            raise serializers.ValidationError('La caja no pertenece al restaurante activo.')
+        if not caja.abierta:
+            raise serializers.ValidationError('La caja seleccionada está cerrada.')
 
         venta = Venta.objects.create(
             usuario=request.user,
             restaurante=restaurante,
             pedido=pedido,
-            caja=caja_abierta,
+            caja=caja,
             estado='pagada',
             metodo_pago=validated_data.get('metodo_pago'),
             total=total

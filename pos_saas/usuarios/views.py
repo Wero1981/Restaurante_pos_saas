@@ -31,6 +31,7 @@ def construir_datos_usuario(user):
         "email": user.email,
         "nombre": user.nombre,
         "apellido": user.apellidoP,
+        "email_verificado":user.email_verificado,
     }
 
     if relacion:

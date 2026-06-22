@@ -1,13 +1,13 @@
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
-from restaurantes.models import Restaurante
 
 class Plan(models.Model):
     nombre = models.CharField(max_length=50)
     precio = models.DecimalField(max_digits=10, decimal_places=2)
     limite_usuarios = models.IntegerField()
     limite_sucursales = models.IntegerField(default=1)
-    limi_cajas = models.IntegerField(default=1)
+    limite_cajas = models.IntegerField(default=1)
     activo = models.BooleanField(default=True)
     mercadopago_plan_id = models.CharField(max_length=255, blank=True)
 
@@ -38,9 +38,18 @@ class Suscripcion(models.Model):
         (ESTADO_VENCIDA, "Vencida"),
     ]
 
-    restaurante = models.OneToOneField(
-        Restaurante,
-        on_delete=models.CASCADE
+    usuario_principal = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="suscripcion",
+    )
+
+    plan_pendiente = models.ForeignKey(
+        Plan,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
     )
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT)
     activa = models.BooleanField(default=True)
@@ -56,7 +65,7 @@ class Suscripcion(models.Model):
     cancelar_al_final = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"{self.restaurante.nombre} - {self.plan.nombre}"
+        return f"{self.usuario_principal.email} - {self.plan.nombre}"
 
     @property
     def esta_vencida(self):

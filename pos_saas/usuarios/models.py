@@ -22,7 +22,7 @@ class Usuario(AbstractUser, PermissionsMixin):
     date_joined = models.DateTimeField(auto_now_add=True)
     last_modified = models.DateTimeField(auto_now=True)
     google_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
-    email_verificado = models.BooleanField(default=True)
+    email_verificado = models.BooleanField(default=False)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['nombre',]

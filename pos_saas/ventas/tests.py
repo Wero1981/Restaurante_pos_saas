@@ -6,8 +6,9 @@ from rest_framework.test import APITestCase
 from productos.models import Categoria, Producto
 from restaurantes.models import Restaurante
 from usuarios.models import Usuario
+from caja.models import Caja
 
-from .models import Mesa, Pedido, PedidoDetalle
+from .models import Mesa, Pedido, PedidoDetalle, Venta
 
 
 class MesasPorRestauranteTests(APITestCase):
@@ -232,3 +233,78 @@ class OrdenesCocinaPorRestauranteTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.pedido_dos.refresh_from_db()
         self.assertEqual(self.pedido_dos.mesa, self.mesa_dos)
+
+
+class VentaPorCajaSeleccionadaTests(APITestCase):
+    def setUp(self):
+        self.admin = Usuario.objects.create_user(
+            email="admin-venta-caja@example.com",
+            nombre="Admin",
+            password="test-password",
+        )
+        self.restaurante = Restaurante.objects.create(
+            nombre="Restaurante Venta",
+            direccion="Dirección",
+            telefono="111",
+            propietario=self.admin,
+        )
+        self.otro_restaurante = Restaurante.objects.create(
+            nombre="Otro Restaurante",
+            direccion="Dirección",
+            telefono="222",
+            propietario=self.admin,
+        )
+        categoria = Categoria.objects.create(
+            restaurante=self.restaurante,
+            nombre="Categoría",
+        )
+        self.producto = Producto.objects.create(
+            restaurante=self.restaurante,
+            categoria=categoria,
+            nombre="Producto",
+            precio=Decimal("20.00"),
+            stock=Decimal("10.000"),
+        )
+        self.caja = Caja.objects.create(
+            restaurante=self.restaurante,
+            usuario=self.admin,
+            monto_inicial=Decimal("100.00"),
+        )
+        self.caja_ajena = Caja.objects.create(
+            restaurante=self.otro_restaurante,
+            usuario=self.admin,
+            monto_inicial=Decimal("100.00"),
+        )
+        self.client.force_authenticate(self.admin)
+        self.headers = {"HTTP_X_RESTAURANTE_ID": str(self.restaurante.id)}
+
+    def payload(self, caja):
+        return {
+            "total": "20.00",
+            "metodo_pago": "efectivo",
+            "caja": caja.id,
+            "detalles": [{
+                "producto": self.producto.id,
+                "cantidad": "1.000",
+                "precio_unitario": "20.00",
+            }],
+        }
+
+    def test_venta_se_guarda_en_caja_seleccionada(self):
+        response = self.client.post(
+            "/api/ventas/",
+            self.payload(self.caja),
+            format="json",
+            **self.headers,
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Venta.objects.get(id=response.data["id"]).caja, self.caja)
+
+    def test_rechaza_caja_de_otro_restaurante(self):
+        response = self.client.post(
+            "/api/ventas/",
+            self.payload(self.caja_ajena),
+            format="json",
+            **self.headers,
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

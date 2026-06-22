@@ -32,8 +32,15 @@ class SuscripcionMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        rutas_permitidas = (
+            '/api/usuarios/',
+            '/api/suscripciones/',
+        )
+        if request.path.startswith(rutas_permitidas):
+            return self.get_response(request)
+
         if request.user.is_authenticated and request.restaurante:
-            suscripcion = getattr(request.restaurante, 'suscripcion', None)
+            suscripcion = getattr(request.restaurante.propietario, 'suscripcion', None)
             if suscripcion and suscripcion.esta_vencida:
                 return JsonResponse({
                        'error': 'Suscripcion vencida. Por favor, renueve su suscripción para continuar utilizando el servicio.',
