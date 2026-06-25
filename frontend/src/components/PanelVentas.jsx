@@ -15,7 +15,6 @@ import { useMemo } from "react";
 
 export default function PanelVentas({
   categorias,
-  productos,
   categoriaSeleccionada,
   setCategoriaSeleccionada,
   busqueda,

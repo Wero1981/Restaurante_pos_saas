@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Landing from '../landing/Landing';
 import Login from '../auth/Login';
 import RegisterUser from '../auth/RegisterUser';
 import VerifyEmail from '../auth/VerifyEmail';
@@ -13,6 +14,7 @@ import Ordenes from '../ordenes/Ordenes';
 import Caja from '../caja/Caja';
 import GestionUsuarios from '../usuarios/GestionUsuarios';
 import Suscripciones from '../suscripciones/Suscripciones';
+import Reportes from '../reportes/Reportes';
 import SinPermiso from '../layout/SinPermiso';
 import Layout from '../layout/layout';
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -24,7 +26,7 @@ export default function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<Login />} />
+        <Route path="/" element={<Landing />} />
         <Route path="/register-user" element={<RegisterUser />} />
         <Route path="/verificar-correo" element={<VerifyEmail />} />
         <Route path="/sin-permiso" element={<SinPermiso />} />
@@ -94,6 +96,12 @@ export default function AppRouter() {
           <Route path="/suscripcion" element={
             <RutaProtegida rol="admin">
               <Suscripciones />
+            </RutaProtegida>
+          } />
+
+          <Route path="/reportes" element={
+            <RutaProtegida permiso="ver_reportes">
+              <Reportes />
             </RutaProtegida>
           } />
           

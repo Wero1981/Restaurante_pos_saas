@@ -201,8 +201,8 @@ export default function Pedido() {
   };
 
   // Dialogs
-  const [dialogComensal, setDialogComensal] = useState(false);
-  const [numeroComensales, setNumeroComensales] = useState(1);
+  const [, setDialogComensal] = useState(false);
+  const [, setNumeroComensales] = useState(1);
   const [dialogProducto, setDialogProducto] = useState(false);
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidadProducto, setCantidadProducto] = useState(1);

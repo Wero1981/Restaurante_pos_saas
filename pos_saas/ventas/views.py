@@ -6,9 +6,13 @@ from rest_framework.exceptions import ValidationError
 from rest_framework import status
 from rest_framework.decorators import action
 from django.db import transaction
+from django.db.models import Avg, Count, Sum
+from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from decimal import Decimal
-from .models import Venta, Mesa, Pedido, PedidoDetalle, Comensal
+from caja.models import Caja, MovimientoCaja
+from .models import Venta, VentaDetalle, Mesa, Pedido, PedidoDetalle, Comensal
 from .serializers import (
     VentaSerializer, 
     MesaSerializer, 
@@ -35,6 +39,142 @@ class VentaViewSet(ModelViewSet):
         if not restaurante:
             return Venta.objects.none()
         return Venta.objects.filter(restaurante=restaurante)
+
+    @action(detail=False, methods=['get'], url_path='reportes')
+    def reportes(self, request):
+        restaurante = get_restaurante_usuario(request)
+        if not restaurante:
+            return Response(
+                {'detail': 'Selecciona un restaurante válido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        hoy = timezone.localdate()
+        inicio = parse_date(request.query_params.get('fecha_inicio') or '') or hoy.replace(day=1)
+        fin = parse_date(request.query_params.get('fecha_fin') or '') or hoy
+        if inicio > fin:
+            inicio, fin = fin, inicio
+
+        ventas = Venta.objects.filter(
+            restaurante=restaurante,
+            estado='pagada',
+            created_at__date__gte=inicio,
+            created_at__date__lte=fin,
+        )
+        movimientos = MovimientoCaja.objects.filter(
+            caja__restaurante=restaurante,
+            fecha__date__gte=inicio,
+            fecha__date__lte=fin,
+        )
+        cajas = Caja.objects.filter(
+            restaurante=restaurante,
+            fecha_apertura__date__gte=inicio,
+            fecha_apertura__date__lte=fin,
+        )
+
+        totales = ventas.aggregate(
+            total_ventas=Sum('total'),
+            cantidad=Count('id'),
+            ticket_promedio=Avg('total'),
+        )
+        total_ventas = totales['total_ventas'] or Decimal('0.00')
+        cantidad_ventas = totales['cantidad'] or 0
+        ticket_promedio = totales['ticket_promedio'] or Decimal('0.00')
+
+        movimientos_totales = movimientos.values('tipo').annotate(
+            total=Sum('monto'),
+            cantidad=Count('id'),
+        ).order_by('tipo')
+        total_entradas = Decimal('0.00')
+        total_salidas = Decimal('0.00')
+        movimientos_por_tipo = []
+        for item in movimientos_totales:
+            total = item['total'] or Decimal('0.00')
+            if item['tipo'] == 'entrada':
+                total_entradas = total
+            elif item['tipo'] == 'salida':
+                total_salidas = total
+            movimientos_por_tipo.append({
+                'tipo': item['tipo'],
+                'cantidad': item['cantidad'],
+                'total': total,
+            })
+
+        ventas_por_metodo = ventas.values('metodo_pago').annotate(
+            cantidad=Count('id'),
+            total=Sum('total'),
+        ).order_by('-total')
+
+        ventas_diarias = ventas.annotate(fecha=TruncDate('created_at')).values('fecha').annotate(
+            cantidad=Count('id'),
+            total=Sum('total'),
+        ).order_by('fecha')
+
+        ventas_mensuales = ventas.annotate(mes=TruncMonth('created_at')).values('mes').annotate(
+            cantidad=Count('id'),
+            total=Sum('total'),
+        ).order_by('mes')
+
+        productos = VentaDetalle.objects.filter(
+            venta__in=ventas,
+        ).values(
+            'producto_id',
+            'producto__nombre',
+        ).annotate(
+            cantidad=Sum('cantidad'),
+            total=Sum('subtotal'),
+            veces_vendido=Count('id'),
+        ).order_by('-total')[:20]
+
+        ventas_por_usuario = ventas.values(
+            'usuario_id',
+            'usuario__nombre',
+            'usuario__email',
+        ).annotate(
+            cantidad=Count('id'),
+            total=Sum('total'),
+        ).order_by('-total')
+
+        cajas_data = []
+        for caja in cajas.order_by('-fecha_apertura'):
+            cajas_data.append({
+                'id': caja.id,
+                'abierta': caja.abierta,
+                'fecha_apertura': caja.fecha_apertura,
+                'fecha_cierre': caja.fecha_cierre,
+                'monto_inicial': caja.monto_inicial,
+                'monto_final': caja.monto_final,
+                'total_ventas': caja.total_ventas,
+                'total_efectivo': caja.total_efectivo,
+                'total_tarjeta': caja.total_tarjeta,
+                'total_otros': caja.total_otros,
+                'entradas': caja.total_movimientos_entrada,
+                'salidas': caja.total_movimientos_salida,
+            })
+
+        return Response({
+            'rango': {
+                'fecha_inicio': inicio,
+                'fecha_fin': fin,
+            },
+            'resumen': {
+                'total_ventas': total_ventas,
+                'cantidad_ventas': cantidad_ventas,
+                'ticket_promedio': ticket_promedio,
+                'total_entradas': total_entradas,
+                'total_salidas': total_salidas,
+                'balance_neto': total_ventas + total_entradas - total_salidas,
+                'cajas_abiertas': cajas.filter(abierta=True).count(),
+                'cajas_cerradas': cajas.filter(abierta=False).count(),
+            },
+            'ventas_por_metodo': list(ventas_por_metodo),
+            'ventas_diarias': list(ventas_diarias),
+            'ventas_mensuales': list(ventas_mensuales),
+            'productos_mas_vendidos': list(productos),
+            'ventas_por_usuario': list(ventas_por_usuario),
+            'movimientos_por_tipo': movimientos_por_tipo,
+            'cajas': cajas_data,
+        })
 
 @extend_schema_view(
     retrieve=extend_schema(

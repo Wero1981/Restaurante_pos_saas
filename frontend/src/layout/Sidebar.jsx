@@ -18,13 +18,14 @@ import {
   ArrowDownUp,
   ArrowDownCircle,
   BadgeDollarSign,
+  BarChart3,
 } from 'lucide-react';
 
 
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userRol, cerrarSesion } = usePOS();
+  const { userRol, cerrarSesion, suscripcionBloqueada } = usePOS();
   const [collapsed, setCollapsed] = useState(false);
   
   const menuItems = [
@@ -42,6 +43,7 @@ export default function Sidebar() {
     ...(userRol === 'admin' ? [
       { path: '/restaurantes', icon: Store, label: 'Restaurantes', treeview: false },
       {path: '/usuarios', icon: Users, label: 'Usuarios', treeview: false },
+      {path: '/reportes', icon: BarChart3, label: 'Reportes', treeview: false },
       {path: '/suscripcion', icon: BadgeDollarSign, label: 'Suscripción', treeview: false },
       { path: '/restaurante', icon: Settings, label: 'Configuración', treeview: false }
     ] : [])
@@ -51,6 +53,9 @@ export default function Sidebar() {
     cerrarSesion();
     navigate('/login', { replace: true });
   };
+
+  const bloqueoClass = 'cursor-not-allowed opacity-45 hover:bg-transparent hover:text-gray-300 hover:translate-x-0';
+  const isItemBloqueado = (path) => suscripcionBloqueada && path !== '/suscripcion';
   
   return (
     <div className={`bg-gradient-to-b from-gray-900 to-gray-950 text-white h-screen flex flex-col shadow-2xl transition-all duration-300 relative ${
@@ -90,17 +95,26 @@ export default function Sidebar() {
         <ul className="space-y-1">
           {menuItems.map((item) => {
             const IconComponent = item.icon;
+            const bloqueado = isItemBloqueado(item.path);
             return (
               item.treeview ? (
                 <li key={item.path}>  
                   <details className="group">
-                    <summary className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                    <summary
+                      onClick={(event) => {
+                        if (bloqueado) event.preventDefault();
+                      }}
+                      className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
                       location.pathname.startsWith(item.path)
                         ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 scale-105' 
-                        : 'text-gray-300 hover:bg-gray-800/50 hover:text-white hover:translate-x-1'
+                        : bloqueado
+                          ? bloqueoClass
+                          : 'cursor-pointer text-gray-300 hover:bg-gray-800/50 hover:text-white hover:translate-x-1'
                     } ${
                       collapsed ? 'justify-center' : ''
-                    }`}>
+                    }`}
+                      title={bloqueado ? 'Renueva tu suscripción para acceder' : ''}
+                    >
                       <div className={`w-5 h-5 flex items-center justify-center rounded-md ${
                         location.pathname.startsWith(item.path)
                           ? 'bg-white/10 text-white'
@@ -121,10 +135,17 @@ export default function Sidebar() {
                     <ul className="mt-2 space-y-1 pl-11">
                       <li>
                         <Link to="/inventario"
+                          onClick={(event) => {
+                            if (bloqueado) event.preventDefault();
+                          }}
+                          aria-disabled={bloqueado}
+                          title={bloqueado ? 'Renueva tu suscripción para acceder' : ''}
                           className={`block p-2 rounded-lg transition-all duration-200 ${
                             location.pathname === '/inventario'
                               ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 scale-105' 
-                              : 'text-gray-300 hover:bg-gray-800/50 hover:text-white hover:translate-x-1'
+                              : bloqueado
+                                ? bloqueoClass
+                                : 'text-gray-300 hover:bg-gray-800/50 hover:text-white hover:translate-x-1'
                           }`}
                         >
                           <span className="flex items-center gap-2">
@@ -136,10 +157,17 @@ export default function Sidebar() {
                       <li>
                         <Link 
                           to="/inventario/movimientos-entrada" 
+                          onClick={(event) => {
+                            if (bloqueado) event.preventDefault();
+                          }}
+                          aria-disabled={bloqueado}
+                          title={bloqueado ? 'Renueva tu suscripción para acceder' : ''}
                           className={`block p-2 rounded-lg transition-all duration-200 ${
                             location.pathname === '/inventario/movimientos-entrada'
                               ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 scale-105' 
-                              : 'text-gray-300 hover:bg-gray-800/50 hover:text-white hover:translate-x-1'
+                              : bloqueado
+                                ? bloqueoClass
+                                : 'text-gray-300 hover:bg-gray-800/50 hover:text-white hover:translate-x-1'
                           }`}
                         >
                           <span className="flex items-center gap-2">
@@ -158,12 +186,18 @@ export default function Sidebar() {
                   className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
                     location.pathname === item.path 
                       ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 scale-105' 
-                      : 'text-gray-300 hover:bg-gray-800/50 hover:text-white hover:translate-x-1'
+                      : bloqueado
+                        ? bloqueoClass
+                        : 'text-gray-300 hover:bg-gray-800/50 hover:text-white hover:translate-x-1'
                   } ${
                     collapsed ? 'justify-center' : ''
                   }`}
                   to={item.path}
-                  title={collapsed ? item.label : ''}
+                  onClick={(event) => {
+                    if (bloqueado) event.preventDefault();
+                  }}
+                  aria-disabled={bloqueado}
+                  title={bloqueado ? 'Renueva tu suscripción para acceder' : collapsed ? item.label : ''}
                 >
                 
                   <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${

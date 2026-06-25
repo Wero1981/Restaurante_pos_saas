@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { usePOS } from '../context/POSContext';
 
 /**
@@ -22,11 +22,16 @@ export function RutaProtegida({
   children,          // Componente a renderizar si tiene permiso
   redirectTo = '/sin-permiso'  // Ruta a la que redirigir si no tiene permiso
 }) {
-  const { tienePermiso, userRol } = usePOS();
+  const { tienePermiso, userRol, suscripcionBloqueada } = usePOS();
+  const location = useLocation();
   const token = localStorage.getItem('token');
 
   if (!token) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (suscripcionBloqueada && location.pathname !== '/suscripcion') {
+    return <Navigate to="/suscripcion" replace />;
   }
 
   if (rol && userRol !== rol) {

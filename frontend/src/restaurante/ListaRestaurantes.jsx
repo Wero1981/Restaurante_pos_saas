@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../services/api';
@@ -7,6 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Search, Edit, MapPin, Phone, Mail, Globe, Store, Calendar } from "lucide-react";
 import { usePOS } from '../context/POSContext';
+import {
+  isSubscriptionExpiredError,
+  SUBSCRIPTION_EXPIRED_NOTICE,
+} from '../lib/subscription';
 
 export default function ListaRestaurantes() {
   const navigate = useNavigate();
@@ -16,11 +20,7 @@ export default function ListaRestaurantes() {
   const [uso, setUso] = useState(null);
  const { seleccionarRestaurante } = usePOS();
 
-  useEffect(() => {
-    cargarRestaurantes();
-  }, []);
-
-  const cargarRestaurantes = async () => {
+  const cargarRestaurantes = useCallback(async () => {
     try {
       setLoading(true);
       const [res, usoRes] = await Promise.all([
@@ -31,6 +31,17 @@ export default function ListaRestaurantes() {
       setUso(usoRes.data || null);
     } catch (error) {
       console.error('Error cargando restaurantes:', error);
+      if (isSubscriptionExpiredError(error)) {
+        navigate('/suscripcion', {
+          replace: true,
+          state: {
+            subscriptionExpired: true,
+            message: SUBSCRIPTION_EXPIRED_NOTICE,
+          },
+        });
+        return;
+      }
+
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -41,7 +52,11 @@ export default function ListaRestaurantes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    cargarRestaurantes();
+  }, [cargarRestaurantes]);
 
   const editarRestaurante = (restaurante) => {
     navigate('/restaurante', { state: { restaurante } });

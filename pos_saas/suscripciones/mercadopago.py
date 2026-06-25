@@ -25,17 +25,25 @@ def _headers():
 
 
 def _request(method, path, **kwargs):
-    response = requests.request(
-        method,
-        urljoin(API_BASE_URL, path),
-        headers=_headers(),
-        timeout=15,
-        **kwargs,
-    )
-    if response.status_code >= 400:
-        raise MercadoPagoError(
-            response.json().get("message", "Mercado Pago rechazó la solicitud.")
+    try:
+        response = requests.request(
+            method,
+            urljoin(API_BASE_URL, path),
+            headers=_headers(),
+            timeout=15,
+            **kwargs,
         )
+    except requests.RequestException as error:
+        raise MercadoPagoError(
+            "No se pudo conectar con Mercado Pago. Intenta nuevamente."
+        ) from error
+
+    if response.status_code >= 400:
+        try:
+            message = response.json().get("message")
+        except ValueError:
+            message = None
+        raise MercadoPagoError(message or "Mercado Pago rechazó la solicitud.")
     return response.json()
 
 

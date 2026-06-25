@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import {
   CalendarDays,
@@ -14,6 +15,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { usePOS } from '@/context/POSContext';
 import api from '@/services/api';
+import {
+  isSubscriptionExpiredError,
+  SUBSCRIPTION_EXPIRED_NOTICE,
+} from '@/lib/subscription';
 
 
 const formatCurrency = (value) =>
@@ -32,6 +37,7 @@ const formatDate = (value) => {
 };
 
 export default function Suscripciones() {
+  const location = useLocation();
   const { restauranteActivo } = usePOS();
   const [planes, setPlanes] = useState([]);
   const [suscripcion, setSuscripcion] = useState(null);
@@ -40,6 +46,18 @@ export default function Suscripciones() {
   const [seleccionando, setSeleccionando] = useState(null);
   const [pagando, setPagando] = useState(null);
   const [error, setError] = useState('');
+  const [expiredNotice, setExpiredNotice] = useState(
+    location.state?.subscriptionExpired
+      ? location.state.message || SUBSCRIPTION_EXPIRED_NOTICE
+      : ''
+  );
+
+  const mensajeVencimiento = useMemo(
+    () => expiredNotice || (
+      suscripcion?.esta_vencida ? SUBSCRIPTION_EXPIRED_NOTICE : ''
+    ),
+    [expiredNotice, suscripcion?.esta_vencida]
+  );
 
   const cargarDatos = useCallback(async () => {
     if (!restauranteActivo?.id) {
@@ -52,15 +70,36 @@ export default function Suscripciones() {
 
     setCargando(true);
     setError('');
+    setExpiredNotice(
+      location.state?.subscriptionExpired
+        ? location.state.message || SUBSCRIPTION_EXPIRED_NOTICE
+        : ''
+    );
     try {
-      const [planesResponse, suscripcionResponse, usoResponse] = await Promise.all([
-        api.get('/suscripciones/planes/'),
+      const planesResponse = await api.get('/suscripciones/planes/');
+      setPlanes(Array.isArray(planesResponse.data) ? planesResponse.data : []);
+
+      const [suscripcionResponse, usoResponse] = await Promise.allSettled([
         api.get('/suscripciones/actual/'),
         api.get('/suscripciones/uso/'),
       ]);
-      setPlanes(Array.isArray(planesResponse.data) ? planesResponse.data : []);
-      setSuscripcion(suscripcionResponse.data || null);
-      setUso(usoResponse.data || null);
+
+      if (suscripcionResponse.status === 'fulfilled') {
+        setSuscripcion(suscripcionResponse.value.data || null);
+      } else if (isSubscriptionExpiredError(suscripcionResponse.reason)) {
+        setExpiredNotice(SUBSCRIPTION_EXPIRED_NOTICE);
+      } else {
+        throw suscripcionResponse.reason;
+      }
+
+      if (usoResponse.status === 'fulfilled') {
+        setUso(usoResponse.value.data || null);
+      } else if (isSubscriptionExpiredError(usoResponse.reason)) {
+        setUso(null);
+        setExpiredNotice(SUBSCRIPTION_EXPIRED_NOTICE);
+      } else {
+        throw usoResponse.reason;
+      }
     } catch (requestError) {
       console.error('Error cargando suscripción:', requestError);
       setError(
@@ -70,14 +109,23 @@ export default function Suscripciones() {
     } finally {
       setCargando(false);
     }
-  }, [restauranteActivo?.id]);
+  }, [location.state, restauranteActivo?.id]);
 
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
 
+  const suscripcionActivaPagada = 
+    suscripcion?.estado_pago === 'authorized' &&
+    !suscripcion?.esta_vencida;
+  const estaEnPrueba = 
+    !suscripcion?.esta_vencida &&
+    (
+      suscripcion?.en_periodo_prueba ||
+      suscripcion?.estado_pago === 'trialing'
+    );
+
   const seleccionarPlan = async (plan) => {
-    if (plan.id === suscripcion?.plan?.id) return;
     const esGratis = Number(plan.precio) <= 0;
 
     const confirmacion = await Swal.fire({
@@ -136,7 +184,7 @@ export default function Suscripciones() {
       setPagando(null);
     }
   };
-
+  
   if (cargando) {
     return (
       <div className="h-[calc(100vh-80px)] flex items-center justify-center">
@@ -154,9 +202,16 @@ export default function Suscripciones() {
             Planes y suscripción
           </h1>
           <p className="text-gray-600 mt-1">
-            Administra el plan de {restauranteActivo?.nombre || 'tu restaurante'}.
+            Administra el plan de tu cuenta.
           </p>
         </div>
+
+        {mensajeVencimiento && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-red-800">
+            <p className="font-semibold">Tu acceso necesita renovación</p>
+            <p className="mt-1 text-sm">{mensajeVencimiento}</p>
+          </div>
+        )}
 
         {error ? (
           <Card>
@@ -171,7 +226,11 @@ export default function Suscripciones() {
                 <div>
                   <p className="text-sm text-gray-500">Plan actual</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {suscripcion?.plan?.nombre || 'Sin plan'}
+                    {estaEnPrueba
+                      ? 'Etapa de prueba'
+                      : suscripcion?.esta_vencida
+                        ? 'Suscripción vencida'
+                        : suscripcion?.plan?.nombre || 'Sin plan'}
                   </p>
                 </div>
                 <div>
@@ -226,7 +285,8 @@ export default function Suscripciones() {
 
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {planes.map((plan) => {
-                const actual = plan.id === suscripcion?.plan?.id;
+                const actual = suscripcionActivaPagada && plan.id === suscripcion?.plan?.id;
+                const mismoPlanVencido = suscripcion?.esta_vencida && plan.id === suscripcion?.plan?.id;
                 const esGratis = Number(plan.precio) <= 0;
                 return (
                   <Card
@@ -277,7 +337,13 @@ export default function Suscripciones() {
                         ) : !esGratis ? (
                           <CreditCard className="w-4 h-4 mr-2" />
                         ) : null}
-                        {actual ? 'Seleccionado' : esGratis ? 'Elegir plan' : 'Pagar con Mercado Pago'}
+                        {actual
+                          ? 'Seleccionado'
+                          : mismoPlanVencido
+                            ? 'Renovar con Mercado Pago'
+                            : esGratis
+                              ? 'Elegir plan'
+                              : 'Pagar con Mercado Pago'}
                       </Button>
                     </CardContent>
                   </Card>

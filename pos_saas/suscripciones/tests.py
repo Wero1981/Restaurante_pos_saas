@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from restaurantes.models import Restaurante, UsuarioRestaurante
 from usuarios.models import Usuario
@@ -64,6 +65,13 @@ class SuscripcionesTests(APITestCase):
     def headers(self, restaurante):
         return {"HTTP_X_RESTAURANTE_ID": str(restaurante.id)}
 
+    def jwt_headers(self, usuario, restaurante):
+        token = RefreshToken.for_user(usuario).access_token
+        return {
+            "HTTP_AUTHORIZATION": f"Bearer {token}",
+            **self.headers(restaurante),
+        }
+
     def test_suscripcion_nueva_muestra_quince_dias(self):
         self.client.force_authenticate(self.admin)
 
@@ -86,6 +94,31 @@ class SuscripcionesTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["id"], self.suscripcion_uno.id)
+
+    def test_middleware_bloquea_modulos_con_suscripcion_vencida_y_jwt(self):
+        self.suscripcion_uno.vence = timezone.localdate() - timedelta(days=1)
+        self.suscripcion_uno.save(update_fields=["vence"])
+
+        response = self.client.get(
+            "/api/productos/",
+            **self.jwt_headers(self.admin, self.restaurante_uno),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json()["detail"], "La suscripción está vencida o inactiva.")
+        self.assertEqual(response.json()["codigo"], "SUSCRIPCION_VENCIDA")
+
+    def test_middleware_permite_suscripciones_con_suscripcion_vencida_y_jwt(self):
+        self.suscripcion_uno.vence = timezone.localdate() - timedelta(days=1)
+        self.suscripcion_uno.save(update_fields=["vence"])
+
+        response = self.client.get(
+            "/api/suscripciones/actual/",
+            **self.jwt_headers(self.admin, self.restaurante_uno),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["esta_vencida"])
 
     def test_plan_pago_requiere_checkout(self):
         self.client.force_authenticate(self.admin)

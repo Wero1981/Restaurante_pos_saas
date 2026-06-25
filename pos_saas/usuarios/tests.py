@@ -26,7 +26,7 @@ class RegistroUsuarioTests(APITestCase):
         )
         self.payload = {
             "email": "nuevo-admin@example.com",
-            "password": "test-password",
+            "password": "Test-password1",
             "nombre": "Nuevo Admin",
             "restaurante_nombre": "Restaurante Nuevo",
         }

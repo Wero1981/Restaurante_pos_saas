@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import api from '@/services/api';
 
 const POSContext = createContext();
 
@@ -12,15 +13,16 @@ export const usePOS = () => {
 };
 
 export const POSProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [userRol, setUserRol] = useState(null);
-  const [permisos, setPermisos] = useState([]);
-  const [mesaSeleccionada, setMesaSeleccionada] = useState(null);
-  const [pedidoActivo, setPedidoActivo] = useState(null);
-  const [comensalSeleccionado, setComensalSeleccionado] = useState(null);
-  const [carrito, setCarrito] = useState([]);
-  const [showSidebar, setShowSidebar] = useState(true);
-  const [restauranteActivo, setRestauranteActivo] = useState(null);
+  const [ user, setUser ] = useState(null);
+  const [ userRol, setUserRol ] = useState(null);
+  const [ permisos, setPermisos ] = useState([]);
+  const [ mesaSeleccionada, setMesaSeleccionada ] = useState(null);
+  const [ pedidoActivo, setPedidoActivo ] = useState(null);
+  const [ comensalSeleccionado, setComensalSeleccionado ] = useState(null);
+  const [ carrito, setCarrito ] = useState([]);
+  const [ showSidebar, setShowSidebar ] = useState(true);
+  const [ restauranteActivo, setRestauranteActivo ] = useState(null);
+  const [ suscripcion, setSuscripcion ] = useState(null);
 
 
   const cargarUsuarioYPermisos = async () => {
@@ -89,6 +91,23 @@ export const POSProvider = ({ children }) => {
     }
   };
 
+  const cargarSuscripcion = useCallback(async () => {
+    try {
+      const response = await api.get('/suscripciones/actual/');
+      setSuscripcion(response.data || null)
+      return response.data || null;
+
+    }catch {
+      setSuscripcion(null)
+      return null
+    }
+  }, []);
+
+  const suscripcionBloqueada = Boolean(
+    suscripcion?.esta_vencida ||
+    suscripcion?.activa === false
+  );
+
   // Cargar usuario y permisos al montar el componente
   useEffect(() => {
     // Solo cargar si hay token (sesión activa)
@@ -97,6 +116,12 @@ export const POSProvider = ({ children }) => {
       Promise.resolve().then(() => cargarUsuarioYPermisos());
     }
   }, []);
+
+  useEffect(() => {
+    if (userRol === 'admin' && restauranteActivo?.id) {
+      Promise.resolve().then(() => cargarSuscripcion());
+    }
+  }, [cargarSuscripcion, restauranteActivo?.id, userRol]);
 
   // Cargar permisos del usuario autenticado desde localStorage 
   
@@ -234,6 +259,7 @@ export const POSProvider = ({ children }) => {
     setUser(null);
     setUserRol(null);
     setPermisos([]);
+    setSuscripcion(null);
     resetearPOS();
     setShowSidebar(true);
   }, [resetearPOS]);
@@ -282,6 +308,11 @@ export const POSProvider = ({ children }) => {
     // Restaurante
     restauranteActivo,
     seleccionarRestaurante,
+
+    //suscripciones
+    suscripcion,
+    suscripcionBloqueada,
+    cargarSuscripcion
   };
 
   return (

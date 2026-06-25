@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-export default function btnCategoria() {
+export default function BtnCategoria() {
   useEffect(() => {
     // Lógica para el botón de categoría
   }, []);

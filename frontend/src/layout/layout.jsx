@@ -2,7 +2,7 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import { usePOS } from "../context/POSContext";
-
+import AvisoSuscripcion from "@/components/AvisoSuscripcion"; 
 export default function Layout() {
   const { showSidebar } = usePOS();
   return (
@@ -11,6 +11,7 @@ export default function Layout() {
       <div className="flex-1 flex flex-col">
         <Topbar />
         <div className="flex-1 pl-1 overflow-auto bg-gray-50">
+          <AvisoSuscripcion />
           <Outlet />
         </div>
       </div>
