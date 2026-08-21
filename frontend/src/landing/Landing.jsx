@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChefHat,
   CreditCard,
+  MonitorSmartphone,
   ReceiptText,
   ShieldCheck,
   Store,
@@ -23,6 +24,11 @@ const features = [
     icon: ReceiptText,
     title: 'Ventas y pedidos',
     text: 'Controla mesas, comensales, pedidos parciales, cocina, caja y tickets.',
+  },
+  {
+    icon: MonitorSmartphone,
+    title: 'Comandas digitales, sin impresoras por departamento',
+    text: 'Meseros, cocina y caja trabajan conectados en tiempo real mediante usuarios y permisos. Consulta y prepara pedidos desde cualquier dispositivo autorizado, sin depender de impresoras en cada área.',
   },
   {
     icon: BarChart3,
@@ -130,7 +136,7 @@ export default function Landing() {
               La pantalla principal está hecha para trabajar rápido: mesas, comandas, productos, cobros y cierre de caja sin saltar entre herramientas.
             </p>
           </div>
-          <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
             {features.map((feature) => {
               const Icon = feature.icon;
               return (
