@@ -173,10 +173,11 @@ class VentaSerializer(serializers.ModelSerializer):
 class MesaSerializer(serializers.ModelSerializer):
     numero = serializers.CharField(source='nombre', required=False, allow_blank=True)
     nombre = serializers.CharField(required=False, allow_blank=True)
+    area_nombre = serializers.CharField(source='area.nombre', read_only=True)
     
     class Meta:
         model = Mesa
-        fields = ['id', 'numero', 'nombre', 'capacidad', 'estado', 'activa', 'restaurante']
+        fields = ['id', 'numero', 'nombre', 'capacidad', 'estado', 'activa', 'area', 'area_nombre', 'restaurante']
         read_only_fields = ['id', 'restaurante']
     
     def validate(self, attrs):
@@ -192,6 +193,13 @@ class MesaSerializer(serializers.ModelSerializer):
                     'numero': 'Este campo es requerido.'
                 })
         
+        area = attrs.get('area', getattr(self.instance, 'area', None))
+        restaurante = get_restaurante_request(self.context.get('request'))
+        if area and restaurante and area.restaurante_id != restaurante.id:
+            raise serializers.ValidationError({
+                'area': 'El área no pertenece al restaurante activo.'
+            })
+
         return attrs
     
 class ComensalSerializer(serializers.ModelSerializer):
@@ -232,7 +240,11 @@ class PedidoDetalleSerializer(serializers.ModelSerializer):
             'id': obj.producto.id,
             'nombre': obj.producto.nombre,
             'descripcion': obj.producto.descripcion,
-            'precio': float(obj.producto.precio)
+            'precio': float(obj.producto.precio),
+            'estacion': {
+                'id': obj.producto.estacion_id,
+                'nombre': obj.producto.estacion.nombre,
+            } if obj.producto.estacion_id else None,
         }
         
 class PedidoSerializer(serializers.ModelSerializer):

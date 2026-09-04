@@ -48,6 +48,13 @@ def construir_datos_usuario(user):
                 }
                 for permiso in relacion.permisos.all()
             ],
+            "estaciones": [
+                {
+                    "id": estacion.id,
+                    "nombre": estacion.nombre,
+                }
+                for estacion in relacion.estaciones.filter(activa=True)
+            ],
         })
 
     return user_data

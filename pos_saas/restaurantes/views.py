@@ -5,14 +5,14 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
-from rest_framework.exceptions import APIException, PermissionDenied
-from django.db import transaction
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
+from django.db import models, transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
-from .models import Restaurante, UsuarioRestaurante, Permiso
-from .serializer import RestauranteSerializer, UsuarioRestauranteSerializer, PermisoSerializer
+from .models import AreaServicio, Estacion, Restaurante, UsuarioRestaurante, Permiso
+from .serializer import AreaServicioSerializer, EstacionSerializer, RestauranteSerializer, UsuarioRestauranteSerializer, PermisoSerializer
 from usuarios.models import Usuario
-from core.permissions import EsAdmin, TienePermisoRestaurante
+from core.permissions import EsAdmin, PuedeAdministrarMesas, TienePermisoRestaurante
 from core.restaurantes import get_restaurante_request
 from suscripciones.limites import (
     obtener_limites_efectivos,
@@ -46,6 +46,19 @@ def format_restaurant_email(restaurante, value):
         return ''
 
     return f'{normalized_local}@{domain_part}'
+
+
+def validar_limite_configuracion(restaurante, modelo, clave, codigo, etiqueta):
+    suscripcion = obtener_suscripcion(restaurante, bloquear=True)
+    limites = obtener_limites_efectivos(suscripcion)
+    usados = modelo.objects.filter(restaurante=restaurante).count()
+    if usados >= limites[clave]:
+        raise PermissionDenied({
+            'detail': f'Alcanzaste el límite de {etiqueta} de tu suscripción.',
+            'codigo': codigo,
+            'limite': limites[clave],
+            'usados': usados,
+        })
 
 @extend_schema_view(
     retrieve=extend_schema(
@@ -136,6 +149,11 @@ class RestauranteViewSet(viewsets.ModelViewSet):
             usuario=principal,
             restaurante=sucursal,
             defaults={'rol': UsuarioRestaurante.ADMIN, 'activo': True},
+        )
+        AreaServicio.objects.get_or_create(
+            restaurante=sucursal,
+            nombre='General',
+            defaults={'descripcion': 'Área predeterminada'},
         )
     
     @extend_schema(summary="Completar datos del restaurante asociado al usuario autenticado.")
@@ -309,6 +327,15 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
                 if 'permisos_ids' in request.data:
                     permisos_ids = request.data.get('permisos_ids', [])
                     usuario_restaurante.permisos.set(permisos_ids)
+
+                if 'estaciones_ids' in request.data:
+                    estaciones = Estacion.objects.filter(
+                        id__in=request.data.get('estaciones_ids', []),
+                        restaurante=restaurante,
+                    )
+                    if estaciones.count() != len(set(request.data.get('estaciones_ids', []))):
+                        raise ValidationError('Una estación no pertenece al restaurante activo.')
+                    usuario_restaurante.estaciones.set(estaciones)
                 
                 serializer = self.get_serializer(usuario_restaurante)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -368,6 +395,16 @@ class UsuarioRestauranteViewSet(viewsets.ModelViewSet):
                 if 'permisos_ids' in request.data:
                     permisos_ids = request.data.get('permisos_ids', [])
                     instance.permisos.set(permisos_ids)
+
+                if 'estaciones_ids' in request.data:
+                    estaciones_ids = request.data.get('estaciones_ids', [])
+                    estaciones = Estacion.objects.filter(
+                        id__in=estaciones_ids,
+                        restaurante=instance.restaurante,
+                    )
+                    if estaciones.count() != len(set(estaciones_ids)):
+                        raise ValidationError('Una estación no pertenece al restaurante activo.')
+                    instance.estaciones.set(estaciones)
                     
                 instance.save()
                 
@@ -399,3 +436,101 @@ class PermisoViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PermisoSerializer
     permission_classes = [IsAuthenticated, EsAdmin]
     queryset = Permiso.objects.all()
+
+
+class EstacionViewSet(viewsets.ModelViewSet):
+    serializer_class = EstacionSerializer
+
+    def get_permissions(self):
+        permissions = [IsAuthenticated()]
+        if self.action not in ('list', 'retrieve'):
+            permissions.append(EsAdmin())
+        return permissions
+
+    def get_queryset(self):
+        restaurante = get_restaurante_request(self.request)
+        if not restaurante:
+            return Estacion.objects.none()
+        return Estacion.objects.filter(restaurante=restaurante)
+
+    @transaction.atomic
+    def perform_create(self, serializer):
+        restaurante = get_restaurante_request(self.request)
+        if not restaurante:
+            raise ValidationError('Selecciona un restaurante válido.')
+        validar_limite_configuracion(
+            restaurante,
+            Estacion,
+            'estaciones',
+            'LIMITE_ESTACIONES',
+            'estaciones',
+        )
+        serializer.save(restaurante=restaurante)
+
+
+class AreaServicioViewSet(viewsets.ModelViewSet):
+    serializer_class = AreaServicioSerializer
+
+    def get_permissions(self):
+        permissions = [IsAuthenticated()]
+        if self.action not in ('list', 'retrieve'):
+            permissions.append(PuedeAdministrarMesas())
+        return permissions
+
+    def get_queryset(self):
+        restaurante = get_restaurante_request(self.request)
+        if not restaurante:
+            return AreaServicio.objects.none()
+        return (
+            AreaServicio.objects.filter(restaurante=restaurante)
+            .annotate(mesas_count=models.Count('mesas'))
+        )
+
+    @transaction.atomic
+    def perform_create(self, serializer):
+        restaurante = get_restaurante_request(self.request)
+        if not restaurante:
+            raise ValidationError('Selecciona un restaurante válido.')
+        validar_limite_configuracion(
+            restaurante,
+            AreaServicio,
+            'areas',
+            'LIMITE_AREAS',
+            'áreas',
+        )
+        serializer.save(restaurante=restaurante)
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        desactivando = instance.activa and request.data.get('activa') is False
+
+        if desactivando and instance.nombre.casefold() == 'general':
+            raise ValidationError('El área General no se puede desactivar.')
+
+        if desactivando and instance.mesas.exists():
+            accion_mesas = request.data.get('accion_mesas')
+            if accion_mesas == 'mover_general':
+                general, _ = AreaServicio.objects.get_or_create(
+                    restaurante=instance.restaurante,
+                    nombre='General',
+                    defaults={'descripcion': 'Área predeterminada'},
+                )
+                instance.mesas.update(area=general)
+            elif accion_mesas != 'ocultar':
+                raise ValidationError({
+                    'accion_mesas': (
+                        'Elige mover las mesas a General u ocultarlas.'
+                    ),
+                })
+
+        return super().update(request, *args, **kwargs)
+
+    def perform_destroy(self, instance):
+        if instance.nombre.casefold() == 'general':
+            raise ValidationError('El área General no se puede eliminar.')
+        if instance.mesas.exists():
+            raise ValidationError(
+                'Mueve las mesas a otra área antes de eliminarla.'
+            )
+        instance.delete()

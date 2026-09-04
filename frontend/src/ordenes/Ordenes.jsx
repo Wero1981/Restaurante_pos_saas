@@ -325,6 +325,11 @@ export default function Ordenes() {
                           <p className="font-semibold text-gray-800 text-sm">
                             {detalle.cantidad}x {detalle.producto?.nombre}
                           </p>
+                          {detalle.producto?.estacion?.nombre && (
+                            <span className="mt-1 inline-flex rounded bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
+                              {detalle.producto.estacion.nombre}
+                            </span>
+                          )}
                           {detalle.comensal?.nombre && (
                             <p className="text-xs text-gray-500 flex items-center gap-1">
                               <Users className="w-3 h-3" />

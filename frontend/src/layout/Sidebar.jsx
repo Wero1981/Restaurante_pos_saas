@@ -19,6 +19,7 @@ import {
   ArrowDownCircle,
   BadgeDollarSign,
   BarChart3,
+  Factory,
 } from 'lucide-react';
 
 
@@ -42,6 +43,7 @@ export default function Sidebar() {
     ] : []),
     ...(userRol === 'admin' ? [
       { path: '/restaurantes', icon: Store, label: 'Restaurantes', treeview: false },
+      { path: '/estaciones', icon: Factory, label: 'Estaciones', treeview: false },
       {path: '/usuarios', icon: Users, label: 'Usuarios', treeview: false },
       {path: '/reportes', icon: BarChart3, label: 'Reportes', treeview: false },
       {path: '/suscripcion', icon: BadgeDollarSign, label: 'Suscripción', treeview: false },

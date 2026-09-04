@@ -8,6 +8,8 @@ class Plan(models.Model):
     limite_usuarios = models.IntegerField()
     limite_sucursales = models.IntegerField(default=1)
     limite_cajas = models.IntegerField(default=1)
+    limite_areas = models.IntegerField(default=3)
+    limite_estaciones = models.IntegerField(default=3)
     activo = models.BooleanField(default=True)
     mercadopago_plan_id = models.CharField(max_length=255, blank=True)
 

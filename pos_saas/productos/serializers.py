@@ -31,6 +31,8 @@ class CategoriaSerializer(serializers.ModelSerializer):
         return parent
     
 class ProductoSerializer(serializers.ModelSerializer):
+    estacion_nombre = serializers.CharField(source='estacion.nombre', read_only=True)
+
     class Meta:
         model = Producto
         fields = '__all__'
@@ -48,3 +50,16 @@ class ProductoSerializer(serializers.ModelSerializer):
                 'La categoría pertenece a otro restaurante.'
             )
         return categoria
+
+    def validate_estacion(self, estacion):
+        request = self.context.get('request')
+        restaurante = (
+            get_restaurante_request(request)
+            if request
+            else getattr(self.instance, 'restaurante', None)
+        )
+        if estacion and restaurante and estacion.restaurante_id != restaurante.id:
+            raise serializers.ValidationError(
+                'La estación pertenece a otro restaurante.'
+            )
+        return estacion

@@ -5,6 +5,7 @@ import RegisterUser from '../auth/RegisterUser';
 import VerifyEmail from '../auth/VerifyEmail';
 import RegisterRestaurante from '../restaurante/RegisterRestaurante';
 import ListaRestaurantes from '../restaurante/ListaRestaurantes';
+import Estaciones from '../restaurante/Estaciones';
 import Productos from '../productos/Productos';
 import Inventario from '../productos/inventario';
 import MovimientosEntrada from '../productos/MovimientosEntrada';
@@ -47,6 +48,12 @@ export default function AppRouter() {
           <Route path="/restaurante" element={
             <RutaProtegida permiso="administrar_usuarios">
               <RegisterRestaurante />
+            </RutaProtegida>
+          } />
+
+          <Route path="/estaciones" element={
+            <RutaProtegida rol="admin">
+              <Estaciones />
             </RutaProtegida>
           } />
 

@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import Usuario
-from restaurantes.models import Restaurante, UsuarioRestaurante
+from restaurantes.models import AreaServicio, Restaurante, UsuarioRestaurante
 from suscripciones.models import Plan, Suscripcion
 from datetime import timedelta
 from django.db import transaction
@@ -23,6 +23,12 @@ def crear_restaurante_para_usuario(user, restaurante_nombre):
         usuario=user,
         restaurante=restaurante,
         rol='admin',
+    )
+
+    AreaServicio.objects.create(
+        restaurante=restaurante,
+        nombre='General',
+        descripcion='Área predeterminada',
     )
 
     plan = Plan.objects.filter(nombre='Basico').order_by('id').first()

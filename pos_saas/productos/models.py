@@ -22,6 +22,13 @@ class Producto(models.Model):
     
     restaurante = models.ForeignKey(Restaurante, on_delete=models.CASCADE)
     categoria = models.ForeignKey(Categoria, on_delete=models.CASCADE, null=True, blank=True)
+    estacion = models.ForeignKey(
+        'restaurantes.Estacion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='productos',
+    )
     nombre = models.CharField(max_length=100)
     descripcion = models.TextField(blank=True)
     codigo_barras = models.CharField(max_length=50, blank=True)
@@ -49,4 +56,3 @@ class Producto(models.Model):
         if not skip_validation:
             self.full_clean()
         super().save(*args, **kwargs)
-

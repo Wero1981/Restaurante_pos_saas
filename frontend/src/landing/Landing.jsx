@@ -4,9 +4,10 @@ import {
   CheckCircle2,
   ChefHat,
   CreditCard,
+  Factory,
+  LayoutGrid,
   MonitorSmartphone,
   ReceiptText,
-  ShieldCheck,
   Store,
   Users,
 } from 'lucide-react';
@@ -23,29 +24,34 @@ const features = [
   {
     icon: ReceiptText,
     title: 'Ventas y pedidos',
-    text: 'Controla mesas, comensales, pedidos parciales, cocina, caja y tickets.',
+    text: 'Controla comensales, pedidos parciales, cobros y tickets desde un mismo flujo.',
+  },
+  {
+    icon: LayoutGrid,
+    title: 'Mesas organizadas por áreas',
+    text: 'Separa salón, terraza, barra o zonas VIP para localizar cada mesa y atender más rápido.',
+  },
+  {
+    icon: Factory,
+    title: 'Órdenes por estación',
+    text: 'Cada producto llega automáticamente a Cocina, Bebidas, Barra o Postres.',
   },
   {
     icon: MonitorSmartphone,
-    title: 'Comandas digitales, sin impresoras por departamento',
-    text: 'Meseros, cocina y caja trabajan conectados en tiempo real mediante usuarios y permisos. Consulta y prepara pedidos desde cualquier dispositivo autorizado, sin depender de impresoras en cada área.',
+    title: 'Equipo conectado en tiempo real',
+    text: 'Meseros, cocina y caja consultan solo las pantallas y órdenes que les corresponden desde cualquier dispositivo autorizado.',
   },
   {
     icon: BarChart3,
     title: 'Reportes descargables',
     text: 'Consulta ventas diarias, mensuales, efectivo, tarjeta, salidas y productos.',
   },
-  {
-    icon: ShieldCheck,
-    title: 'Suscripción protegida',
-    text: 'Bloqueo automático al vencer la prueba o el plan, con renovación guiada.',
-  },
 ];
 
 const workflows = [
   'Abre caja y registra movimientos',
   'Toma pedidos por mesa o venta rápida',
-  'Envía productos a cocina',
+  'Distribuye productos por estación',
   'Cobra en efectivo o tarjeta',
   'Cierra caja con totales claros',
   'Exporta reportes a Excel',
@@ -56,19 +62,19 @@ const plans = [
     name: 'Básico',
     price: '$299',
     detail: 'Para restaurantes que empiezan a ordenar su operación.',
-    items: ['1 restaurante', 'Usuarios esenciales', 'Caja y reportes'],
+    items: ['1 restaurante', 'Hasta 5 empleados por restaurante', '1 caja abierta', '3 áreas y 3 estaciones por restaurante'],
   },
   {
     name: 'Profesional',
     price: '$599',
     detail: 'Para equipos con más personal y operación diaria intensa.',
-    items: ['Hasta 3 restaurantes', 'Más empleados', 'Más cajas abiertas'],
+    items: ['Hasta 3 restaurantes', 'Hasta 15 empleados por restaurante', '3 cajas abiertas', '8 áreas y 8 estaciones por restaurante'],
   },
   {
     name: 'Premium',
     price: '$999',
     detail: 'Para grupos que necesitan crecer con mayor control.',
-    items: ['Sucursales ampliadas', 'Reportes avanzados', 'Mayor capacidad'],
+    items: ['Hasta 10 restaurantes', 'Hasta 50 empleados por restaurante', '10 cajas abiertas', '20 áreas y 20 estaciones por restaurante'],
   },
 ];
 
@@ -83,6 +89,7 @@ export default function Landing() {
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-gray-200 md:flex">
             <a href="#operacion" className="hover:text-white">Operación</a>
+            <a href="#areas-estaciones" className="hover:text-white">Áreas y estaciones</a>
             <a href="#reportes" className="hover:text-white">Reportes</a>
             <a href="#planes" className="hover:text-white">Planes</a>
           </nav>
@@ -114,7 +121,7 @@ export default function Landing() {
               POS Restaurant
             </h1>
             <p className="mt-5 max-w-xl text-lg leading-8 text-gray-200">
-              Controla pedidos, mesas, caja, inventario, empleados, sucursales y reportes desde una experiencia pensada para la operación diaria.
+              Organiza mesas por áreas y envía cada producto a la estación correcta mientras controlas pedidos, caja, inventario y equipo en tiempo real.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-orange-500 hover:bg-orange-600">
@@ -136,7 +143,7 @@ export default function Landing() {
               La pantalla principal está hecha para trabajar rápido: mesas, comandas, productos, cobros y cierre de caja sin saltar entre herramientas.
             </p>
           </div>
-          <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+          <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {features.map((feature) => {
               const Icon = feature.icon;
               return (
@@ -147,6 +154,51 @@ export default function Landing() {
                 </article>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      <section id="areas-estaciones" className="scroll-mt-16 border-b bg-gray-50 px-5 py-20">
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase text-orange-600">Del salón a preparación</p>
+            <h2 className="mt-2 text-3xl font-bold md:text-4xl">Cada orden llega al equipo correcto</h2>
+            <p className="mt-4 text-lg leading-8 text-gray-600">
+              Organiza el servicio según la distribución real de tu restaurante y evita comandas mezcladas entre cocina, barra y postres.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-0 overflow-hidden rounded-md border bg-white md:grid-cols-3">
+            <article className="border-b p-6 md:border-b-0 md:border-r">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-100 text-orange-700">
+                <LayoutGrid className="h-5 w-5" />
+              </div>
+              <p className="mt-5 text-sm font-semibold text-orange-600">1. Ubica la mesa</p>
+              <h3 className="mt-1 text-xl font-bold">Áreas de servicio</h3>
+              <p className="mt-3 text-sm leading-6 text-gray-600">
+                Filtra mesas por salón, terraza, barra o cualquier zona que forme parte de tu operación.
+              </p>
+            </article>
+            <article className="border-b p-6 md:border-b-0 md:border-r">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-green-100 text-green-700">
+                <ReceiptText className="h-5 w-5" />
+              </div>
+              <p className="mt-5 text-sm font-semibold text-green-700">2. Registra el pedido</p>
+              <h3 className="mt-1 text-xl font-bold">Una sola comanda</h3>
+              <p className="mt-3 text-sm leading-6 text-gray-600">
+                El mesero captura alimentos y bebidas juntos, con cantidades, comensales y observaciones.
+              </p>
+            </article>
+            <article className="p-6">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-cyan-100 text-cyan-700">
+                <Factory className="h-5 w-5" />
+              </div>
+              <p className="mt-5 text-sm font-semibold text-cyan-700">3. Distribuye automáticamente</p>
+              <h3 className="mt-1 text-xl font-bold">Estaciones de preparación</h3>
+              <p className="mt-3 text-sm leading-6 text-gray-600">
+                Cocina ve los platillos, Bebidas recibe las bebidas y cada responsable atiende solo lo suyo.
+              </p>
+            </article>
           </div>
         </div>
       </section>

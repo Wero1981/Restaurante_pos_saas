@@ -13,6 +13,8 @@ class PlanSerializer(serializers.ModelSerializer):
             "limite_usuarios",
             "limite_sucursales",
             "limite_cajas",
+            "limite_areas",
+            "limite_estaciones",
             "mercadopago_plan_id",
         ]
 

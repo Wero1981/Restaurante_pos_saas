@@ -50,7 +50,13 @@ class LimitesSuscripcionTests(TestCase):
         limites = obtener_limites_efectivos(self.suscripcion)
         self.assertEqual(
             limites,
-            {"restaurantes": 1, "usuarios": 4, "cajas": 1},
+            {
+                "restaurantes": 1,
+                "usuarios": 4,
+                "cajas": 1,
+                "areas": 2,
+                "estaciones": 2,
+            },
         )
 
     def test_pago_autorizado_aplica_limites_del_plan(self):
@@ -61,7 +67,13 @@ class LimitesSuscripcionTests(TestCase):
 
         self.assertEqual(
             limites,
-            {"restaurantes": 3, "usuarios": 15, "cajas": 3},
+            {
+                "restaurantes": 3,
+                "usuarios": 15,
+                "cajas": 3,
+                "areas": 3,
+                "estaciones": 3,
+            },
         )
 
     def test_sucursal_usa_suscripcion_del_principal(self):

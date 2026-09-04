@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from core.permissions import EsAdmin
 from core.restaurantes import get_restaurante_request
 from caja.models import Caja
-from restaurantes.models import Restaurante, UsuarioRestaurante
+from restaurantes.models import AreaServicio, Estacion, Restaurante, UsuarioRestaurante
 
 from .limites import obtener_limites_efectivos, obtener_suscripcion
 from .mercadopago import (
@@ -92,6 +92,18 @@ class UsoSuscripcionView(APIView):
                     abierta=True,
                 ).count(),
                 "limite": limites["cajas"],
+            },
+            "areas": {
+                "usadas": AreaServicio.objects.filter(
+                    restaurante=restaurante,
+                ).count(),
+                "limite": limites["areas"],
+            },
+            "estaciones": {
+                "usadas": Estacion.objects.filter(
+                    restaurante=restaurante,
+                ).count(),
+                "limite": limites["estaciones"],
             },
         })
 

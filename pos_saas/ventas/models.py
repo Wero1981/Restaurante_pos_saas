@@ -1,9 +1,16 @@
 from django.db import models
-from restaurantes.models import Restaurante
+from restaurantes.models import AreaServicio, Restaurante
 from usuarios.models import Usuario
 
 class Mesa(models.Model):
     restaurante = models.ForeignKey(Restaurante, on_delete=models.CASCADE)
+    area = models.ForeignKey(
+        AreaServicio,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='mesas',
+    )
     nombre = models.CharField(max_length=50)
     capacidad = models.IntegerField(default=4)
     estado = models.CharField(

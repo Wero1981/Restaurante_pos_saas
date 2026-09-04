@@ -6,7 +6,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from restaurantes.models import Restaurante, UsuarioRestaurante
+from restaurantes.models import AreaServicio, Estacion, Restaurante, UsuarioRestaurante
 from usuarios.models import Usuario
 
 from .models import Pago, Plan, Suscripcion
@@ -145,6 +145,48 @@ class SuscripcionesTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_prueba_limita_areas(self):
+        self.client.force_authenticate(self.admin)
+        for nombre in ("General", "Terraza"):
+            response = self.client.post(
+                "/api/restaurantes/areas/",
+                {"nombre": nombre},
+                format="json",
+                **self.headers(self.restaurante_uno),
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        response = self.client.post(
+            "/api/restaurantes/areas/",
+            {"nombre": "Barra"},
+            format="json",
+            **self.headers(self.restaurante_uno),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["codigo"], "LIMITE_AREAS")
+
+    def test_prueba_limita_estaciones(self):
+        self.client.force_authenticate(self.admin)
+        for nombre in ("Cocina", "Bebidas"):
+            response = self.client.post(
+                "/api/restaurantes/estaciones/",
+                {"nombre": nombre},
+                format="json",
+                **self.headers(self.restaurante_uno),
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        response = self.client.post(
+            "/api/restaurantes/estaciones/",
+            {"nombre": "Postres"},
+            format="json",
+            **self.headers(self.restaurante_uno),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["codigo"], "LIMITE_ESTACIONES")
 
     @patch("suscripciones.views.crear_checkout_plan")
     def test_admin_puede_crear_checkout_mercadopago(self, crear_checkout_plan):

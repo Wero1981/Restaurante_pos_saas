@@ -13,6 +13,7 @@ class CodigosPermisos:
     VER_REPORTES = 'ver_reportes'
     EXPORTAR_REPORTES = 'exportar_reportes'
     ADMINISTRAR_USUARIOS = 'administrar_usuarios'
+    ADMINISTRAR_MESAS = 'administrar_mesas'
     #MESERO
     CREAR_PEDIDOS = 'crear_pedidos'
     VER_PEDIDOS = 'ver_pedidos'
@@ -34,6 +35,7 @@ class CodigosPermisos:
         (VER_REPORTES, 'Ver reportes'),
         (EXPORTAR_REPORTES, 'Exportar reportes'),
         (ADMINISTRAR_USUARIOS, 'Administrar usuarios'),
+        (ADMINISTRAR_MESAS, 'Administrar mesas y áreas'),
         (CREAR_PEDIDOS, 'Crear pedidos'),
         (VER_PEDIDOS, 'Ver pedidos'),
         (EDITAR_PEDIDOS, 'Editar pedidos'),

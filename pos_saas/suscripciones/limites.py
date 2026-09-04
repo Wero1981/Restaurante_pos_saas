@@ -7,6 +7,8 @@ LIMITES_PRUEBA = {
     "restaurantes": 1,
     "usuarios": 4,
     "cajas": 1,
+    "areas": 2,
+    "estaciones": 2,
 }
 
 
@@ -45,6 +47,8 @@ def obtener_limites_efectivos(suscripcion):
             "restaurantes": suscripcion.plan.limite_sucursales,
             "usuarios": suscripcion.plan.limite_usuarios,
             "cajas": suscripcion.plan.limite_cajas,
+            "areas": suscripcion.plan.limite_areas,
+            "estaciones": suscripcion.plan.limite_estaciones,
         }
 
     if (

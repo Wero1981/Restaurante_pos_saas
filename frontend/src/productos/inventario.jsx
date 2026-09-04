@@ -17,6 +17,7 @@ export default function Inventario() {
   const { restauranteActivo } = usePOS();
   const [categorias, setCategorias] = useState([]);
   const [productos, setProductos] = useState([]);
+  const [estaciones, setEstaciones] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [expandidos, setExpandidos] = useState({});
@@ -40,6 +41,7 @@ export default function Inventario() {
     stock: 0,
     stock_ilimitado: false,
     categoria: null,
+    estacion: null,
     activo: true
   });
 
@@ -63,15 +65,25 @@ export default function Inventario() {
     }
   }, []);
 
+  const cargarEstaciones = useCallback(async () => {
+    try {
+      const res = await api.get('/restaurantes/estaciones/');
+      setEstaciones(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.error('Error cargando estaciones:', error);
+      setEstaciones([]);
+    }
+  }, []);
+
   useEffect(() => {
     const cargarInventario = async () => {
-      await Promise.all([cargarCategorias(), cargarProductos()]);
+      await Promise.all([cargarCategorias(), cargarProductos(), cargarEstaciones()]);
       setCategoriaSeleccionada(null);
       setBusqueda('');
     };
 
     cargarInventario();
-  }, [cargarCategorias, cargarProductos, restauranteActivo?.id]);
+  }, [cargarCategorias, cargarEstaciones, cargarProductos, restauranteActivo?.id]);
   
   const guardarCategoria = async (e) => {
     e.preventDefault();
@@ -118,6 +130,7 @@ export default function Inventario() {
         precio: '',
         stock: 0,
         categoria: null,
+        estacion: null,
         activo: true
       });
       setDialogProducto(false);
@@ -168,6 +181,7 @@ export default function Inventario() {
       stock: producto.stock,
       stock_ilimitado: producto.stock === -1 || false,
       categoria: producto.categoria,
+      estacion: producto.estacion,
       activo: producto.activo
     });
     setDialogProducto(true);
@@ -257,6 +271,7 @@ export default function Inventario() {
                   stock: 0,
                   stock_ilimitado: false,
                   categoria: cat.id,
+                  estacion: null,
                   activo: true
                 });
                 setDialogProducto(true);
@@ -354,6 +369,7 @@ export default function Inventario() {
                   stock: 0,
                   stock_ilimitado: false,
                   categoria: null,
+                  estacion: null,
                   activo: true
                 });
                 setDialogProducto(true);
@@ -372,6 +388,7 @@ export default function Inventario() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descripción</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estación</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                   </tr>
@@ -379,7 +396,7 @@ export default function Inventario() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {productosFiltrados.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
                         <i className="fas fa-inbox text-4xl mb-2 text-gray-300"></i>
                         <p>No hay productos para mostrar</p>
                       </td>
@@ -404,6 +421,9 @@ export default function Inventario() {
                           }`}>
                             {producto.stock}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {producto.estacion_nombre || 'Todas / sin asignar'}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
@@ -593,6 +613,20 @@ export default function Inventario() {
                   ))}
                 </select>
               </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Estación de preparación</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                value={productoForm.estacion || ''}
+                onChange={(e) => setProductoForm({ ...productoForm, estacion: e.target.value ? Number(e.target.value) : null })}
+              >
+                <option value="">Sin estación (visible para todas)</option>
+                {estaciones.filter(estacion => estacion.activa).map(estacion => (
+                  <option key={estacion.id} value={estacion.id}>{estacion.nombre}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">Define qué pantalla de preparación recibirá este producto.</p>
             </div>
             <div className="flex items-center gap-2">
               <input

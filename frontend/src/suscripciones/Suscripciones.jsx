@@ -5,6 +5,8 @@ import {
   CalendarDays,
   Check,
   CreditCard,
+  Factory,
+  LayoutGrid,
   Loader2,
   Store,
   Users,
@@ -262,12 +264,12 @@ export default function Suscripciones() {
             {suscripcion?.en_periodo_prueba && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 flex items-center gap-3 text-blue-800">
                 <CalendarDays className="w-5 h-5 shrink-0" />
-                Prueba de 15 días: 1 restaurante, 4 empleados por restaurante y 1 caja abierta.
+                Prueba de 15 días: 1 restaurante, 4 empleados, 1 caja, 2 áreas y 2 estaciones.
               </div>
             )}
 
             {uso && (
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <div className="border-l-4 border-orange-500 bg-white p-4 shadow-sm">
                   <p className="text-sm text-gray-500">Restaurantes activos</p>
                   <p className="text-xl font-bold">{uso.restaurantes.usados} / {uso.restaurantes.limite}</p>
@@ -279,6 +281,14 @@ export default function Suscripciones() {
                 <div className="border-l-4 border-blue-600 bg-white p-4 shadow-sm">
                   <p className="text-sm text-gray-500">Cajas abiertas</p>
                   <p className="text-xl font-bold">{uso.cajas.abiertas} / {uso.cajas.limite}</p>
+                </div>
+                <div className="border-l-4 border-violet-600 bg-white p-4 shadow-sm">
+                  <p className="text-sm text-gray-500">Áreas de mesas</p>
+                  <p className="text-xl font-bold">{uso.areas.usadas} / {uso.areas.limite}</p>
+                </div>
+                <div className="border-l-4 border-cyan-600 bg-white p-4 shadow-sm">
+                  <p className="text-sm text-gray-500">Estaciones</p>
+                  <p className="text-xl font-bold">{uso.estaciones.usadas} / {uso.estaciones.limite}</p>
                 </div>
               </div>
             )}
@@ -322,6 +332,14 @@ export default function Suscripciones() {
                         <p className="flex items-center gap-2">
                           <CreditCard className="w-4 h-4 text-orange-500" />
                           {plan.limite_cajas} caja(s) abierta(s) por restaurante
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <LayoutGrid className="w-4 h-4 text-violet-600" />
+                          Hasta {plan.limite_areas} áreas por restaurante
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <Factory className="w-4 h-4 text-cyan-600" />
+                          Hasta {plan.limite_estaciones} estaciones por restaurante
                         </p>
                       </div>
                       <Button

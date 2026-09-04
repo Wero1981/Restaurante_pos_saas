@@ -112,3 +112,28 @@ class TienePermiso(BasePermission):
         return usuario_restaurante.permisos.filter(
             codigo__in=[permiso_requerido, 'todos_los_permisos']
         ).exists()
+
+
+class PuedeAdministrarMesas(BasePermission):
+    """Permite administrar mesas al propietario, admin o usuario autorizado."""
+
+    def has_permission(self, request, view):
+        restaurante = get_restaurante_request(request)
+        if not restaurante:
+            return False
+
+        if restaurante.propietario_id == request.user.id:
+            return True
+
+        relacion = UsuarioRestaurante.objects.filter(
+            usuario=request.user,
+            restaurante=restaurante,
+            activo=True,
+        ).first()
+        if not relacion:
+            return False
+        if relacion.rol == UsuarioRestaurante.ADMIN:
+            return True
+        return relacion.permisos.filter(
+            codigo__in=['administrar_mesas', 'todos_los_permisos']
+        ).exists()

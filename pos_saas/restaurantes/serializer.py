@@ -1,7 +1,8 @@
 from rest_framework import serializers
-from .models import Restaurante, UsuarioRestaurante, Permiso
+from .models import AreaServicio, Estacion, Restaurante, UsuarioRestaurante, Permiso
 from configuraciones.models import Configuracion
 from configuraciones.serializer import ConfiguracionSerializer
+from core.restaurantes import get_restaurante_request
 
 
 class PermisoSerializer(serializers.ModelSerializer):
@@ -9,6 +10,42 @@ class PermisoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Permiso
         fields = ['id', 'codigo', 'descripcion']
+
+
+class EstacionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Estacion
+        fields = ['id', 'nombre', 'descripcion', 'activa', 'orden']
+        read_only_fields = ['id']
+
+
+class AreaServicioSerializer(serializers.ModelSerializer):
+    mesas_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = AreaServicio
+        fields = ['id', 'nombre', 'descripcion', 'activa', 'orden', 'mesas_count']
+        read_only_fields = ['id', 'mesas_count']
+
+    def validate_nombre(self, nombre):
+        nombre = nombre.strip()
+        if not nombre:
+            raise serializers.ValidationError('El nombre del área es obligatorio.')
+        return nombre
+
+    def validate(self, attrs):
+        restaurante = getattr(self.instance, 'restaurante', None)
+        if restaurante is None:
+            restaurante = get_restaurante_request(self.context.get('request'))
+        nombre = attrs.get('nombre', getattr(self.instance, 'nombre', ''))
+        if restaurante and AreaServicio.objects.filter(
+            restaurante=restaurante,
+            nombre__iexact=nombre,
+        ).exclude(pk=getattr(self.instance, 'pk', None)).exists():
+            raise serializers.ValidationError({
+                'nombre': 'Ya existe un área con este nombre.'
+            })
+        return attrs
 
 class RestauranteSerializer(serializers.ModelSerializer):
 
@@ -81,6 +118,14 @@ class UsuarioRestauranteSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
+    estaciones_detalle = EstacionSerializer(source='estaciones', many=True, read_only=True)
+    estaciones_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Estacion.objects.all(),
+        source='estaciones',
+        write_only=True,
+        required=False,
+    )
     
     class Meta:
         model = UsuarioRestaurante
@@ -93,7 +138,17 @@ class UsuarioRestauranteSerializer(serializers.ModelSerializer):
             'rol',
             'permisos_detalle',
             'permisos_ids',
+            'estaciones_detalle',
+            'estaciones_ids',
             'activo',
             'created_at'
         ]
         read_only_fields = ['id', 'usuario', 'created_at']
+
+    def validate_estaciones(self, estaciones):
+        restaurante = getattr(self.instance, 'restaurante', None)
+        if restaurante is None:
+            restaurante = get_restaurante_request(self.context.get('request'))
+        if restaurante and any(estacion.restaurante_id != restaurante.id for estacion in estaciones):
+            raise serializers.ValidationError('Una estación no pertenece al restaurante activo.')
+        return estaciones

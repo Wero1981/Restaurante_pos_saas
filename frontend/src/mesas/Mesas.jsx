@@ -6,7 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, Users, MapPin, Edit, Trash2 } from "lucide-react";
+import { Plus, Users, MapPin, Edit, Trash2, Layers3 } from "lucide-react";
+import Swal from 'sweetalert2';
+
+const AREA_FORM_INICIAL = {
+  nombre: '',
+  descripcion: '',
+  orden: 0,
+  activa: true,
+};
 
 export default function Mesas() {
   const navigate = useNavigate();
@@ -15,17 +23,33 @@ export default function Mesas() {
     establecerPedidoActivo,
     mesaSeleccionada,
     restauranteActivo,
+    userRol,
+    tienePermiso,
   } = usePOS();
   const [mesas, setMesas] = useState([]);
+  const [areas, setAreas] = useState([]);
+  const [uso, setUso] = useState(null);
+  const [areaFiltro, setAreaFiltro] = useState('todas');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [mesaForm, setMesaForm] = useState({ numero: '', capacidad: 4 });
+  const [areasDialogOpen, setAreasDialogOpen] = useState(false);
+  const [mesaForm, setMesaForm] = useState({ numero: '', capacidad: 4, area: '' });
+  const [areaForm, setAreaForm] = useState(AREA_FORM_INICIAL);
+  const [areaEditando, setAreaEditando] = useState(null);
   const [editando, setEditando] = useState(null);
+  const [guardandoMesa, setGuardandoMesa] = useState(false);
+  const [guardandoArea, setGuardandoArea] = useState(false);
   const [, setCargandoPedido] = useState(false);
 
   const cargarMesas = useCallback(async () => {
     try {
-      const res = await api.get('/mesas/');
-      setMesas(Array.isArray(res.data) ? res.data : []);
+      const [mesasResponse, areasResponse, usoResponse] = await Promise.all([
+        api.get('/mesas/'),
+        api.get('/restaurantes/areas/'),
+        api.get('/suscripciones/uso/'),
+      ]);
+      setMesas(Array.isArray(mesasResponse.data) ? mesasResponse.data : []);
+      setAreas(Array.isArray(areasResponse.data) ? areasResponse.data : []);
+      setUso(usoResponse.data || null);
     } catch (error) {
       console.error('Error cargando mesas:', error);
       setMesas([]);
@@ -38,6 +62,8 @@ export default function Mesas() {
 
   const guardarMesa = async (e) => {
     e.preventDefault();
+    if (guardandoMesa) return;
+    setGuardandoMesa(true);
     try {
       if (editando) {
         await api.put(`/mesas/${editando}/`, mesaForm);
@@ -45,23 +71,57 @@ export default function Mesas() {
         await api.post('/mesas/', mesaForm);
       }
       setDialogOpen(false);
-      setMesaForm({ numero: '', capacidad: 4 });
+      setMesaForm({ numero: '', capacidad: 4, area: '' });
+      await Swal.fire({
+        icon: 'success',
+        title: editando ? 'Mesa actualizada' : 'Mesa creada',
+        timer: 1200,
+        showConfirmButton: false,
+      });
       setEditando(null);
       cargarMesas();
     } catch (error) {
-      console.error('Error guardando mesa:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo guardar la mesa',
+        text:
+          error.response?.data?.area?.[0] ||
+          error.response?.data?.numero?.[0] ||
+          error.response?.data?.detail ||
+          'Revisa la información de la mesa.',
+        confirmButtonColor: '#f97316',
+      });
+    } finally {
+      setGuardandoMesa(false);
     }
   };
 
   const eliminarMesa = async (id) => {
-    if (confirm('¿Eliminar esta mesa?')) {
-      try {
-        await api.delete(`/mesas/${id}/`);
-        cargarMesas();
-      } catch (error) {
-        console.error('Error eliminando mesa:', error);
-      }
+    const resultado = await Swal.fire({
+      icon: 'warning',
+      title: '¿Eliminar esta mesa?',
+      text: 'Esta acción no se puede deshacer.',
+      showCancelButton: true,
+      confirmButtonText: 'Eliminar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626',
+    });
+
+    if(!resultado.isConfirmed) return;
+    try {
+      await api.delete(`/mesas/${id}/`);
+      cargarMesas();
+    } catch (error) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo eliminar',
+        text:
+          error.response?.data?.detail ||
+          'La mesa podría tener pedidos relacionados.',
+        confirmButtonColor: '#f97316',
+      });
     }
+
   };
 
   const handleSeleccionarMesa = async (mesa) => {
@@ -91,7 +151,12 @@ export default function Mesas() {
       navigate('/pedido');
     } catch (error) {
       console.error('Error abriendo pedido:', error);
-      alert('Error al abrir el pedido');
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo abrir el pedido',
+        text: error.response?.data?.detail || 'Intenta nuevamente.',
+        confirmButtonColor: '#f97316',
+      });
     } finally {
       setCargandoPedido(false);
     }
@@ -99,15 +164,158 @@ export default function Mesas() {
 
   const abrirDialogNuevo = () => {
     setEditando(null);
-    setMesaForm({ numero: '', capacidad: 4 });
+    const areaPredeterminada = areas.find((area) => area.activa)?.id || '';
+    setMesaForm({ numero: '', capacidad: 4, area: areaPredeterminada });
     setDialogOpen(true);
   };
 
   const abrirDialogEditar = (mesa) => {
     setEditando(mesa.id);
-    setMesaForm({ numero: mesa.numero, capacidad: mesa.capacidad || 4 });
+    setMesaForm({
+      numero: mesa.numero,
+      capacidad: mesa.capacidad || 4,
+      area: mesa.area || '',
+    });
     setDialogOpen(true);
   };
+
+  const guardarArea = async (event) => {
+    event.preventDefault();
+    if (guardandoArea) return;
+
+    const areaActual = areas.find((area) => area.id === areaEditando);
+    const desactivandoConMesas = Boolean(
+      areaActual?.activa &&
+      !areaForm.activa &&
+      Number(areaActual.mesas_count ?? 0) > 0
+    );
+    let accionMesas;
+    let dialogCerradoParaDecision = false;
+
+    if (desactivandoConMesas) {
+      setAreasDialogOpen(false);
+      dialogCerradoParaDecision = true;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
+      const decision = await Swal.fire({
+        icon: 'question',
+        title: `¿Qué hacemos con las mesas de ${areaActual.nombre}?`,
+        text: 'Puedes moverlas a General u ocultarlas hasta que reactives el área.',
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'Mover a General',
+        denyButtonText: 'Ocultar mesas',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#f97316',
+        denyButtonColor: '#4b5563',
+        cancelButtonColor: '#9ca3af',
+      });
+
+      if (decision.isDismissed) {
+        setAreasDialogOpen(true);
+        return;
+      }
+      accionMesas = decision.isConfirmed ? 'mover_general' : 'ocultar';
+    }
+
+    setGuardandoArea(true);
+    try {
+      if (areaEditando) {
+        await api.put(`/restaurantes/areas/${areaEditando}/`, {
+          ...areaForm,
+          ...(accionMesas ? { accion_mesas: accionMesas } : {}),
+        });
+      } else {
+        await api.post('/restaurantes/areas/', areaForm);
+      }
+      Swal.fire({
+        icon: 'success',
+        title: areaEditando ? 'Área actualizada' : 'Área creada',
+        timer: 1200,
+        showConfirmButton: false,
+      });
+      setAreaForm(AREA_FORM_INICIAL);
+      setAreaEditando(null);
+      await cargarMesas();
+    } catch (error) {
+      const detalle = error.response?.data?.nombre?.[0]
+        || error.response?.data?.detail
+        || 'Revisa los datos del área.';
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo guardar el área',
+        text: detalle,
+        confirmButtonColor: '#f97316',
+      });
+    } finally {
+      setGuardandoArea(false);
+      if (dialogCerradoParaDecision) setAreasDialogOpen(true);
+    }
+  };
+
+  const editarArea = (area) => {
+    setAreaEditando(area.id);
+    setAreaForm({
+      nombre: area.nombre,
+      descripcion: area.descripcion || '',
+      orden: area.orden ?? 0,
+      activa: area.activa !== false,
+    });
+  };
+
+  const eliminarArea = async (area) => {
+    const cantidadMesas = Number(area.mesas_count ?? 0);
+    const tieneMesas = cantidadMesas > 0;
+
+    setAreasDialogOpen(false);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    const resultado = await Swal.fire({
+      icon: 'warning',
+      title: `¿Eliminar ${area.nombre}?`,
+      text: tieneMesas
+        ? 'Primero debes mover sus mesas a otra área.'
+        : 'Esta acción no se puede deshacer.',
+      showCancelButton: !tieneMesas,
+      showConfirmButton: true,
+      confirmButtonText: tieneMesas ? 'Entendido' : 'Eliminar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: tieneMesas ? '#f97316' : '#dc2626',
+      cancelButtonColor: '#6b7280',
+    });
+
+    if (tieneMesas || !resultado.isConfirmed) {
+      setAreasDialogOpen(true);
+      return;
+    }
+
+    try {
+      await api.delete(`/restaurantes/areas/${area.id}/`);
+      if (String(areaFiltro) === String(area.id)) setAreaFiltro('todas');
+      await cargarMesas();
+    } catch (error) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo eliminar el área',
+        text:
+          error.response?.data?.[0] ||
+          error.response?.data?.detail ||
+          'Mueve sus mesas a otra área antes de eliminarla.',
+        confirmButtonColor: '#f97316',
+      });
+    } finally {
+      setAreasDialogOpen(true);
+    }
+  };
+
+  const areasActivas = areas.filter((area) => area.activa);
+  const limiteAreasAlcanzado = Boolean(
+    uso && uso.areas.usadas >= uso.areas.limite
+  );
+  const puedeAdministrarMesas = userRol === 'admin' || tienePermiso('administrar_mesas');
+  const mesasFiltradas = areaFiltro === 'todas'
+    ? mesas
+    : mesas.filter((mesa) => String(mesa.area) === String(areaFiltro));
 
   const getEstadoColor = (estado) => {
     switch (estado) {
@@ -135,7 +343,7 @@ export default function Mesas() {
     <div className="h-[calc(100vh-80px)] flex flex-col p-6">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-3xl font-bold text-gray-800">
               <MapPin className="inline-block w-8 h-8 text-orange-500 mr-3" />
@@ -143,10 +351,20 @@ export default function Mesas() {
             </h2>
             <p className="text-gray-600 mt-1">Administra las mesas de tu restaurante</p>
           </div>
-          <Button onClick={abrirDialogNuevo} className="bg-orange-500 hover:bg-orange-600">
-            <Plus className="w-4 h-4 mr-2" />
-            Nueva Mesa
-          </Button>
+          <div className="flex items-center gap-2">
+            {puedeAdministrarMesas && (
+              <Button variant="outline" onClick={() => setAreasDialogOpen(true)}>
+                <Layers3 className="w-4 h-4 mr-2" />
+                Configurar áreas
+              </Button>
+            )}
+            {puedeAdministrarMesas && (
+              <Button onClick={abrirDialogNuevo} className="bg-orange-500 hover:bg-orange-600">
+                <Plus className="w-4 h-4 mr-2" />
+                Nueva Mesa
+              </Button>
+            )}
+          </div>
         </div>
 
         {mesaSeleccionada && (
@@ -158,10 +376,32 @@ export default function Mesas() {
         )}
       </div>
 
+      <div className="mb-5 flex gap-2 overflow-x-auto pb-1" aria-label="Filtrar mesas por área">
+        <Button
+          type="button"
+          size="sm"
+          variant={areaFiltro === 'todas' ? 'default' : 'outline'}
+          onClick={() => setAreaFiltro('todas')}
+        >
+          Todas ({mesas.length})
+        </Button>
+        {areasActivas.map((area) => (
+          <Button
+            key={area.id}
+            type="button"
+            size="sm"
+            variant={String(areaFiltro) === String(area.id) ? 'default' : 'outline'}
+            onClick={() => setAreaFiltro(area.id)}
+          >
+            {area.nombre} ({mesas.filter((mesa) => mesa.area === area.id).length})
+          </Button>
+        ))}
+      </div>
+
       {/* Grid de Mesas */}
       <div className="flex-1 overflow-auto">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {mesas.map((mesa) => (
+          {mesasFiltradas.map((mesa) => (
             <Card
               key={mesa.id}
               className={`cursor-pointer transition-all border-2 ${getEstadoColor(mesa.estado)} ${
@@ -191,9 +431,13 @@ export default function Mesas() {
                     <Users className="w-4 h-4" />
                     <span>{mesa.capacidad || 4} personas</span>
                   </div>
+                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span>{mesa.area_nombre || 'General'}</span>
+                  </div>
 
                   {/* Botones de acción */}
-                  <div className="flex gap-2 w-full mt-2">
+                  {puedeAdministrarMesas && <div className="flex gap-2 w-full mt-2">
                     <Button
                       size="sm"
                       variant="outline"
@@ -216,18 +460,18 @@ export default function Mesas() {
                     >
                       <Trash2 className="w-3 h-3" />
                     </Button>
-                  </div>
+                  </div>}
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
 
-        {mesas.length === 0 && (
+        {mesasFiltradas.length === 0 && (
           <div className="text-center py-12">
             <MapPin className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">No hay mesas registradas</p>
-            <p className="text-gray-400 text-sm">Crea tu primera mesa para comenzar</p>
+            <p className="text-gray-500 text-lg">No hay mesas en esta área</p>
+            <p className="text-gray-400 text-sm">Crea una mesa o selecciona otra área</p>
           </div>
         )}
       </div>
@@ -266,15 +510,132 @@ export default function Mesas() {
                 required
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Área</label>
+              <select
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                value={mesaForm.area}
+                onChange={(event) => setMesaForm({ ...mesaForm, area: Number(event.target.value) })}
+                required
+              >
+                <option value="" disabled>Selecciona un área</option>
+                {areasActivas.map((area) => (
+                  <option key={area.id} value={area.id}>{area.nombre}</option>
+                ))}
+              </select>
+            </div>
             <div className="flex gap-2 justify-end">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" className="bg-orange-500 hover:bg-orange-600">
-                {editando ? 'Actualizar' : 'Crear'}
+              <Button type="submit" className="bg-orange-500 hover:bg-orange-600" disabled={guardandoMesa}>
+                {guardandoMesa ? 'Guardando...' : editando ? 'Actualizar' : 'Crear'}
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={areasDialogOpen} onOpenChange={setAreasDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Áreas de mesas</DialogTitle>
+          </DialogHeader>
+
+          {uso?.areas && (
+            <p className="text-sm text-gray-600">
+              {uso.areas.usadas} de {uso.areas.limite} áreas utilizadas.
+            </p>
+          )}
+
+          <form onSubmit={guardarArea} className="grid gap-3 border-b pb-5 sm:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-medium">Nombre *</label>
+              <Input
+                value={areaForm.nombre}
+                onChange={(event) => setAreaForm({ ...areaForm, nombre: event.target.value })}
+                placeholder="Ej. Terraza"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium">Descripción</label>
+              <Input
+                value={areaForm.descripcion}
+                onChange={(event) => setAreaForm({ ...areaForm, descripcion: event.target.value })}
+                placeholder="Ej. Mesas exteriores"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium">Orden</label>
+              <Input
+                type="number"
+                min="0"
+                value={areaForm.orden}
+                onChange={(event) => setAreaForm({ ...areaForm, orden: Number(event.target.value) || 0 })}
+              />
+            </div>
+            <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={areaForm.activa}
+                onChange={(event) => setAreaForm({ ...areaForm, activa: event.target.checked })}
+                disabled={areaEditando && areas.find((area) => area.id === areaEditando)?.nombre.toLowerCase() === 'general'}
+              />
+              Área activa
+            </label>
+            <div className="flex justify-end gap-2 sm:col-span-2">
+              {areaEditando && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setAreaEditando(null);
+                    setAreaForm(AREA_FORM_INICIAL);
+                  }}
+                >
+                  Cancelar edición
+                </Button>
+              )}
+              <Button type="submit" disabled={guardandoArea || (!areaEditando && limiteAreasAlcanzado)}>
+                {guardandoArea ? 'Guardando...' : areaEditando ? 'Actualizar área' : 'Crear área'}
+              </Button>
+            </div>
+          </form>
+
+          <div className="max-h-72 space-y-2 overflow-y-auto">
+            {areas.map((area) => (
+              <div key={area.id} className="flex items-center justify-between gap-3 border-b py-3 last:border-0">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900">{area.nombre}</span>
+                    {!area.activa && <span className="text-xs text-gray-500">Inactiva</span>}
+                  </div>
+                  <p className="truncate text-sm text-gray-500">
+                    {area.mesas_count} {area.mesas_count === 1 ? 'mesa' : 'mesas'}
+                    {area.descripcion ? ` · ${area.descripcion}` : ''}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <Button type="button" size="sm" variant="ghost" onClick={() => editarArea(area)} aria-label={`Editar ${area.nombre}`}>
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-red-600"
+                    onClick={() => eliminarArea(area)}
+                    aria-label={`Eliminar ${area.nombre}`}
+                    disabled={area.nombre.toLowerCase() === 'general'}
+                    title={area.nombre.toLowerCase() === 'general' ? 'El área General es obligatoria' : ''}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

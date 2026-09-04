@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 const GOOGLE_SCRIPT_ID = "google-identity-services";
 const GOOGLE_SCRIPT_URL = "https://accounts.google.com/gsi/client";
+let googleInitialized = false;
+let activeCredentialCallback = null;
 
 export default function GoogleAuthButton({
     onSuccess,
@@ -58,10 +60,16 @@ export default function GoogleAuthButton({
             return;
         }
 
-        window.google.accounts.id.initialize({
-            client_id: clientId,
-            callback: (response) => successRef.current?.(response),
-        });
+        const credentialCallback = (response) => successRef.current?.(response);
+        activeCredentialCallback = credentialCallback;
+
+        if (!googleInitialized) {
+            window.google.accounts.id.initialize({
+                client_id: clientId,
+                callback: (response) => activeCredentialCallback?.(response),
+            });
+            googleInitialized = true;
+        }
 
         buttonRef.current.innerHTML = "";
         window.google.accounts.id.renderButton(buttonRef.current, {
@@ -73,6 +81,12 @@ export default function GoogleAuthButton({
             logo_alignment: "left",
             width: Math.min(buttonRef.current.offsetWidth || 320, 400),
         });
+
+        return () => {
+            if (activeCredentialCallback === credentialCallback) {
+                activeCredentialCallback = null;
+            }
+        };
     }, [clientId, disabled, sdkReady, text]);
 
     if (!clientId) {

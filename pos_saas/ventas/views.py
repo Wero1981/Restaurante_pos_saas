@@ -6,7 +6,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework import status
 from rest_framework.decorators import action
 from django.db import transaction
-from django.db.models import Avg, Count, Sum
+from django.db.models import Avg, Count, Q, Sum
 from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -21,7 +21,8 @@ from .serializers import (
     PedidoSerializer
 )
 from productos.models import Producto
-from core.permissions import TienePermisoRestaurante
+from restaurantes.models import AreaServicio, UsuarioRestaurante
+from core.permissions import PuedeAdministrarMesas, TienePermisoRestaurante
 from core.restaurantes import get_restaurante_request
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 
@@ -213,21 +214,37 @@ class VentaViewSet(ModelViewSet):
 )
 class MesaViewSet(ModelViewSet):
     serializer_class = MesaSerializer
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        permissions = [IsAuthenticated()]
+        if self.action not in ('list', 'retrieve'):
+            permissions.append(PuedeAdministrarMesas())
+        return permissions
 
     def get_queryset(self):
         """Obtiene las mesas del restaurante asociado al usuario autenticado."""
         restaurante = get_restaurante_usuario(self.request)
         if not restaurante:
             return Mesa.objects.none()
-        return Mesa.objects.filter(restaurante=restaurante, activa=True)
+        return Mesa.objects.filter(
+            Q(area__activa=True) | Q(area__isnull=True),
+            restaurante=restaurante,
+            activa=True,
+        ).select_related('area')
     
     def perform_create(self, serializer):
         """Asigna el restaurante al crear una mesa."""
         restaurante = get_restaurante_usuario(self.request)
         if not restaurante:
             raise ValidationError('Usuario no está asociado a ningún restaurante')
-        serializer.save(restaurante=restaurante)
+        area = serializer.validated_data.get('area')
+        if area is None:
+            area, _ = AreaServicio.objects.get_or_create(
+                restaurante=restaurante,
+                nombre='General',
+                defaults={'descripcion': 'Área predeterminada'},
+            )
+        serializer.save(restaurante=restaurante, area=area)
 
 
 class AbrirPedidoView(APIView):
@@ -879,12 +896,35 @@ class PedidoViewSet(ModelViewSet):
         if not restaurante:
             return Response([])
 
+        relacion = (
+            UsuarioRestaurante.objects.filter(
+                usuario=request.user,
+                restaurante=restaurante,
+                activo=True,
+            )
+            .prefetch_related('estaciones')
+            .first()
+        )
+        estaciones_ids = []
+        if relacion and relacion.rol not in (UsuarioRestaurante.ADMIN, UsuarioRestaurante.GERENTE):
+            estaciones_ids = list(
+                relacion.estaciones.filter(activa=True).values_list('id', flat=True)
+            )
+
+        filtro_estaciones = Q()
+        if estaciones_ids:
+            filtro_estaciones = (
+                Q(items__producto__estacion_id__in=estaciones_ids)
+                | Q(items__producto__estacion__isnull=True)
+            )
+
         pedidos = (
             Pedido.objects.filter(
                 restaurante=restaurante,
                 estado='abierto',
                 items__enviado_cocina=True
             )
+            .filter(filtro_estaciones)
             .select_related('mesa', 'mesero')
             .prefetch_related('items__producto', 'items__comensal')
             .distinct()
@@ -895,7 +935,18 @@ class PedidoViewSet(ModelViewSet):
         respuesta = []
 
         for pedido in pedidos:
-            detalles_qs = pedido.items.filter(enviado_cocina=True, cancelado=False).select_related('producto', 'comensal').order_by('fecha')
+            detalles_qs = pedido.items.filter(
+                enviado_cocina=True,
+                cancelado=False,
+            )
+            if estaciones_ids:
+                detalles_qs = detalles_qs.filter(
+                    Q(producto__estacion_id__in=estaciones_ids)
+                    | Q(producto__estacion__isnull=True)
+                )
+            detalles_qs = detalles_qs.select_related(
+                'producto', 'producto__estacion', 'comensal'
+            ).order_by('fecha')
             detalles_data = PedidoDetalleSerializer(detalles_qs, many=True).data
 
             if not detalles_data:

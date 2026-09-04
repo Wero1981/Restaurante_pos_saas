@@ -11,6 +11,8 @@ class PlanAdmin(admin.ModelAdmin):
         "limite_usuarios",
         "limite_sucursales",
         "limite_cajas",
+        "limite_areas",
+        "limite_estaciones",
         "activo",
     )
     list_filter = ("activo",)

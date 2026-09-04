@@ -21,6 +21,7 @@ export default function GestionUsuarios() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editando, setEditando] = useState(null);
   const [permisos, setPermisos] = useState([]);
+  const [estaciones, setEstaciones] = useState([]);
   const [uso, setUso] = useState(null);
   const [usuarioForm, setUsuarioForm] = useState({
     email: '',
@@ -29,6 +30,7 @@ export default function GestionUsuarios() {
     password: '',
     rol: 'mesero',
     permisos_ids: [],
+    estaciones_ids: [],
     activo: true
   });
   const [emailLocalPart, setEmailLocalPart] = useState('');
@@ -96,20 +98,23 @@ export default function GestionUsuarios() {
         if (!cancelado) {
           setUsuarios([]);
           setPermisos([]);
+          setEstaciones([]);
         }
         return;
       }
 
       try {
-        const [usuariosResponse, permisosResponse, usoResponse] = await Promise.all([
+        const [usuariosResponse, permisosResponse, estacionesResponse, usoResponse] = await Promise.all([
           api.get('/restaurantes/usuarios/'),
           api.get('/restaurantes/permisos/'),
+          api.get('/restaurantes/estaciones/'),
           api.get('/suscripciones/uso/'),
         ]);
 
         if (!cancelado) {
           setUsuarios(Array.isArray(usuariosResponse.data) ? usuariosResponse.data : []);
           setPermisos(Array.isArray(permisosResponse.data) ? permisosResponse.data : []);
+          setEstaciones(Array.isArray(estacionesResponse.data) ? estacionesResponse.data : []);
           setUso(usoResponse.data || null);
         }
       } catch (error) {
@@ -117,6 +122,7 @@ export default function GestionUsuarios() {
         if (!cancelado) {
           setUsuarios([]);
           setPermisos([]);
+          setEstaciones([]);
         }
       }
     };
@@ -254,6 +260,7 @@ export default function GestionUsuarios() {
       password: '', // No mostrar password al editar
       rol: usuario.rol || 'mesero',
       permisos_ids: usuario.permisos_detalle?.map(p => p.id) || [],
+      estaciones_ids: usuario.estaciones_detalle?.map(estacion => estacion.id) || [],
       activo: usuario.activo !== undefined ? usuario.activo : true
     });
     setEmailLocalPart(extractLocalPart(usuario.email));
@@ -268,6 +275,7 @@ export default function GestionUsuarios() {
       password: '',
       rol: 'mesero',
       permisos_ids: [],
+      estaciones_ids: [],
       activo: true
     });
     setEmailLocalPart('');
@@ -280,6 +288,15 @@ export default function GestionUsuarios() {
         ? prev.permisos_ids.filter(id => id !== permisoId)
         : [...prev.permisos_ids, permisoId];
       return { ...prev, permisos_ids: permisos };
+    });
+  };
+
+  const toggleEstacion = (estacionId) => {
+    setUsuarioForm(prev => {
+      const estacionesIds = prev.estaciones_ids.includes(estacionId)
+        ? prev.estaciones_ids.filter(id => id !== estacionId)
+        : [...prev.estaciones_ids, estacionId];
+      return { ...prev, estaciones_ids: estacionesIds };
     });
   };
 
@@ -365,6 +382,7 @@ export default function GestionUsuarios() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Permisos</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estaciones</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                 </tr>
@@ -372,7 +390,7 @@ export default function GestionUsuarios() {
               <tbody className="divide-y divide-gray-200 bg-white">
                 {usuariosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
                       <Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
                       <p>No hay usuarios para mostrar</p>
                     </td>
@@ -410,6 +428,19 @@ export default function GestionUsuarios() {
                           )}
                           {usuario.permisos_detalle && usuario.permisos_detalle.length > 2 && (
                             <span className="text-xs text-gray-500">+{usuario.permisos_detalle.length - 2}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {usuario.estaciones_detalle?.length ? (
+                            usuario.estaciones_detalle.map(estacion => (
+                              <span key={estacion.id} className="rounded bg-orange-100 px-2 py-0.5 text-xs text-orange-800">
+                                {estacion.nombre}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-gray-400">Todas / sin asignar</span>
                           )}
                         </div>
                       </td>
@@ -566,6 +597,32 @@ export default function GestionUsuarios() {
                 Selecciona los permisos específicos para este usuario
               </p>
             </div>
+
+            {usuarioForm.rol === 'cocinero' && (
+              <div>
+                <label className="block text-sm font-medium mb-3">Estaciones de preparación</label>
+                <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2 bg-orange-50/50">
+                  {estaciones.length === 0 ? (
+                    <p className="text-xs text-gray-500 text-center py-2">Crea primero una estación desde el menú Estaciones.</p>
+                  ) : estaciones.filter(estacion => estacion.activa).map(estacion => (
+                    <div key={estacion.id} className="flex items-start space-x-2">
+                      <Checkbox
+                        id={`estacion-${estacion.id}`}
+                        checked={usuarioForm.estaciones_ids.includes(estacion.id)}
+                        onCheckedChange={() => toggleEstacion(estacion.id)}
+                      />
+                      <label htmlFor={`estacion-${estacion.id}`} className="text-sm cursor-pointer flex-1">
+                        <div className="font-medium">{estacion.nombre}</div>
+                        {estacion.descripcion && <div className="text-xs text-gray-500">{estacion.descripcion}</div>}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Sin selección verá todas las órdenes. Con estaciones asignadas verá solo sus productos y los productos aún sin estación.
+                </p>
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
               <input
